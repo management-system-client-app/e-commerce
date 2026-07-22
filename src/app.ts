@@ -6,9 +6,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// health check route
+// simple request logger — shows method, URL and time for every incoming request
+app.use((req: Request, res: Response, next: NextFunction) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// health check route (useful for deployment platforms to check if server is alive)
 app.get('/', (req: Request, res: Response) => {
   res.send('E-commerce Backend is running!');
+});
+
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // 404 handler
