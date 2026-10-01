@@ -1,0 +1,753 @@
+{
+  "info": {
+    "name": "Clothing E-commerce API",
+    "description": "Local collection for the clothing store API.\n\nStart the server, then run requests in this order:\n1. Admin login (seeded account) or Register + Customer login. Tokens are saved automatically.\n2. List products. The first product id, brand id, and category id are saved.\n3. Get product. The first variant, size, color, and fabric ids are saved.\n4. Add to cart, place an order, then payment, review, or return requests.\n\nSeeded admin: admin@store.local / Admin@12345\nBase URL variable: {{baseUrl}} (http://localhost:5000).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "userToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "userId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "variantId", "value": "" },
+    { "key": "sizeId", "value": "" },
+    { "key": "colorId", "value": "" },
+    { "key": "fabricId", "value": "" },
+    { "key": "brandId", "value": "" },
+    { "key": "categoryId", "value": "" },
+    { "key": "cartItemId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "orderItemId", "value": "" },
+    { "key": "returnId", "value": "" },
+    { "key": "couponId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('userId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Rina\",\n  \"lastName\": \"Buyer\",\n  \"email\": \"rina@example.com\",\n  \"password\": \"Password123!\",\n  \"confirmPassword\": \"Password123!\",\n  \"phone\": \"01700000000\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/users/register"
+          }
+        },
+        {
+          "name": "Customer login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.collectionVariables.set('userToken', json.data.token);",
+                  "if (json.data && json.data.user && json.data.user.id) pm.collectionVariables.set('userId', json.data.user.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rina@example.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "Admin login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.collectionVariables.set('adminToken', json.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@store.local\",\n  \"password\": \"Admin@12345\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/admin/login"
+          }
+        },
+        {
+          "name": "Current account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/me"
+          }
+        },
+        {
+          "name": "Get user by id",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/users/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data[0];",
+                  "if (!item) return;",
+                  "pm.collectionVariables.set('productId', item.id);",
+                  "if (item.brand) pm.collectionVariables.set('brandId', item.brand.id);",
+                  "if (item.category) pm.collectionVariables.set('categoryId', item.category.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/products?page=1&limit=20&search=oxford",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "products"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "oxford" },
+                { "key": "status", "value": "ACTIVE", "disabled": true },
+                { "key": "gender", "value": "MEN", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const product = json.data;",
+                  "if (!product) return;",
+                  "pm.collectionVariables.set('productId', product.id);",
+                  "const variant = product.variants && product.variants[0];",
+                  "if (!variant) return;",
+                  "pm.collectionVariables.set('variantId', variant.id);",
+                  "if (variant.size) pm.collectionVariables.set('sizeId', variant.size.id);",
+                  "if (variant.color) pm.collectionVariables.set('colorId', variant.color.id);",
+                  "if (variant.fabric) pm.collectionVariables.set('fabricId', variant.fabric.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/products/{{productId}}"
+          }
+        },
+        {
+          "name": "Create product",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Linen Overshirt\",\n  \"description\": \"Lightweight linen overshirt.\",\n  \"status\": \"ACTIVE\",\n  \"gender\": \"MEN\",\n  \"fit\": \"RELAXED\",\n  \"basePrice\": 59,\n  \"compareAtPrice\": 79,\n  \"brandId\": \"{{brandId}}\",\n  \"categoryId\": \"{{categoryId}}\",\n  \"tags\": [\"linen\", \"shirt\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/products",
+            "description": "Run List products first so brandId and categoryId are filled. To upload images, send multipart form-data: a text field named data with this JSON, and one or more files named images."
+          }
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/products/{{productId}}"
+          }
+        },
+        {
+          "name": "Delete product",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/products/{{productId}}",
+            "description": "Fails while the product still has variants."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Variants",
+      "item": [
+        {
+          "name": "List variants",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/variants?productId={{productId}}&page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "variants"],
+              "query": [
+                { "key": "productId", "value": "{{productId}}" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "inStock", "value": "true", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get variant",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/variants/{{variantId}}"
+          }
+        },
+        {
+          "name": "Create variant",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"sizeId\": \"{{sizeId}}\",\n  \"colorId\": \"{{colorId}}\",\n  \"fabricId\": \"{{fabricId}}\",\n  \"sku\": \"NEW-SKU-001\",\n  \"stock\": 10,\n  \"price\": 49\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/variants",
+            "description": "Size, color, and fabric must be a new combination for this product. Get product fills those ids from the first existing variant."
+          }
+        },
+        {
+          "name": "Update variant",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stock\": 30,\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/variants/{{variantId}}"
+          }
+        },
+        {
+          "name": "Delete variant",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/variants/{{variantId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cart",
+      "item": [
+        {
+          "name": "Get cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data.items && json.data.items[0];",
+                  "if (item) pm.collectionVariables.set('cartItemId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/cart"
+          }
+        },
+        {
+          "name": "Add cart item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data.items && json.data.items[0];",
+                  "if (item) pm.collectionVariables.set('cartItemId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/cart/items"
+          }
+        },
+        {
+          "name": "Remove cart item",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Place order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (!json.data) return;",
+                  "pm.collectionVariables.set('orderId', json.data.id);",
+                  "const line = json.data.items && json.data.items[0];",
+                  "if (line) pm.collectionVariables.set('orderItemId', line.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shippingFullName\": \"Rina Buyer\",\n  \"shippingPhone\": \"01700000000\",\n  \"shippingLine1\": \"1 Market Road\",\n  \"shippingCity\": \"Dhaka\",\n  \"shippingPostalCode\": \"1200\",\n  \"shippingCountry\": \"Bangladesh\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/orders",
+            "description": "Uses the signed-in customer's cart. Add a cart item first."
+          }
+        },
+        {
+          "name": "List orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/orders?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "orders"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "PENDING", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const line = json.data && json.data.items && json.data.items[0];",
+                  "if (line) pm.collectionVariables.set('orderItemId', line.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}"
+          }
+        },
+        {
+          "name": "Update order status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CONFIRMED\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/orders/{{orderId}}/status",
+            "description": "Admin only. Cancelling requires cancelReason. Allowed path: PENDING to CONFIRMED or CANCELLED, then PROCESSING, SHIPPED, DELIVERED."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Create payment intent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/payments/create-intent",
+            "description": "Requires STRIPE_SECRET_KEY. The order must belong to the customer and be pending."
+          }
+        },
+        {
+          "name": "Stripe webhook",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "stripe-signature", "value": "" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/payments/webhook",
+            "description": "Stripe sends the raw body and stripe-signature. Use the Stripe CLI for a real event. A manual call without a valid signature returns 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Returns",
+      "item": [
+        {
+          "name": "Create return",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('returnId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"type\": \"RETURN\",\n  \"reason\": \"WRONG_SIZE\",\n  \"note\": \"Too small\",\n  \"items\": [\n    {\n      \"orderItemId\": \"{{orderItemId}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/returns",
+            "description": "The order must be DELIVERED or RETURN_REQUESTED. For an exchange, set type to EXCHANGE and add exchangeVariantId on each item."
+          }
+        },
+        {
+          "name": "List returns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/returns?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "returns"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "REQUESTED", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get return",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/returns/{{returnId}}"
+          }
+        },
+        {
+          "name": "Review return",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"APPROVED\",\n  \"adminNote\": \"Approved for pickup\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/returns/{{returnId}}/review"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reviews",
+      "item": [
+        {
+          "name": "Create review",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"rating\": 5,\n  \"title\": \"Great shirt\",\n  \"comment\": \"Fits well and the fabric is soft.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/reviews",
+            "description": "The customer must already have this product on a confirmed or later order. One review per product."
+          }
+        },
+        {
+          "name": "List product reviews",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/reviews/products/{{productId}}?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "reviews", "products", "{{productId}}"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Coupons",
+      "item": [
+        {
+          "name": "Create coupon",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('couponId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE10\",\n  \"description\": \"Ten percent off\",\n  \"type\": \"PERCENTAGE\",\n  \"value\": 10,\n  \"minOrderAmount\": 20,\n  \"maxDiscount\": 15,\n  \"startsAt\": \"2026-01-01T00:00:00.000Z\",\n  \"endsAt\": \"2026-12-31T23:59:59.000Z\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/coupons"
+          }
+        },
+        {
+          "name": "List coupons",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/coupons?page=1&limit=20&isActive=true",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "coupons"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "isActive", "value": "true" },
+                { "key": "search", "value": "SAVE", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get coupon",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/coupons/{{couponId}}"
+          }
+        },
+        {
+          "name": "Update coupon",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/coupons/{{couponId}}"
+          }
+        },
+        {
+          "name": "Apply coupon",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SAVE10\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/coupons/apply",
+            "description": "Customer token. Uses the cart subtotal. Add orderId to price a pending order instead. This does not change the order."
+          }
+        },
+        {
+          "name": "Delete coupon",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/coupons/{{couponId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Store overview",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/dashboard"
+          }
+        }
+      ]
+    }
+  ]
+}
