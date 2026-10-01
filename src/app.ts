@@ -1,102 +1,75 @@
-import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import morgan from 'morgan';
-import compression from 'compression';
-import cookieParser from 'cookie-parser';
-import AppError from './utils/AppError';
-import logger from './config/logger';
+import compression from "compression";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import express, { type Application, type Request, type Response } from "express";
+import helmet from "helmet";
+import morgan from "morgan";
+import { env } from "./app/config/env";
+import { NotFoundError } from "./app/errors/NotFoundError";
+import { globalErrorHandler } from "./app/middlewares/globalErrorHandler";
+import logger from "./config/logger";
+import routes from "./routes";
 
-const app = express();
+const app: Application = express();
 
-// security-related HTTP headers
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
 app.use(helmet());
 
-// allows frontend (different origin) to call this API
-app.use(cors());
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || env.ALLOWED_ORIGINS.includes(origin)) {
+        callback(null, true);
+        return;
+      }
 
-// compresses response bodies (gzip) for faster transfer
+      callback(null, false);
+    },
+    credentials: true,
+  }),
+);
+
 app.use(compression());
+app.use(cookieParser(env.COOKIE_SECRET));
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
-// parses cookies into req.cookies
-app.use(cookieParser());
-
-// parses incoming JSON request body, with a size limit for safety
-app.use(express.json({ limit: '10kb' }));
-
-// pipes morgan's HTTP request logs into winston instead of console directly
 const morganStream = {
-  write: (message: string) => logger.info(message.trim()),
+  write: (message: string) => {
+    logger.info(message.trim());
+  },
 };
 
-if (process.env.NODE_ENV === 'development') {
-  app.use(morgan('dev', { stream: morganStream }));
-} else {
-  app.use(morgan('combined', { stream: morganStream }));
-}
+app.use(
+  morgan(env.NODE_ENV === "development" ? "dev" : "combined", {
+    stream: morganStream,
+  }),
+);
 
-// health check routes — used to confirm the server is alive
-app.get('/', (req: Request, res: Response) => {
-  res.send('E-commerce Backend is running!');
+app.get("/", (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: "E-commerce backend is running",
+  });
 });
 
-app.get('/health', (req: Request, res: Response) => {
+app.get("/health", (_req: Request, res: Response) => {
   res.status(200).json({
-    status: 'ok',
+    success: true,
+    status: "ok",
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
 });
 
-// ===== API v1 routes =====
-// all actual API endpoints will be added here, versioned under /api/v1
-const apiV1 = express.Router();
+app.use("/api/v1", routes);
 
-// test routes for each error type (remove these later once real routes are built)
-apiV1.get('/test-error/bad-request', (req, res, next) => {
-  next(AppError.badRequest('Invalid input provided'));
+app.use((req, _res, next) => {
+  next(new NotFoundError(`Route not found: ${req.method} ${req.originalUrl}`));
 });
 
-apiV1.get('/test-error/unauthorized', (req, res, next) => {
-  next(AppError.unauthorized('Please log in first'));
-});
-
-apiV1.get('/test-error/forbidden', (req, res, next) => {
-  next(AppError.forbidden('You are not allowed to do this'));
-});
-
-apiV1.get('/test-error/not-found', (req, res, next) => {
-  next(AppError.notFound('Product not found'));
-});
-
-apiV1.get('/test-error/conflict', (req, res, next) => {
-  next(AppError.conflict('Email already registered'));
-});
-
-apiV1.get('/test-error/validation', (req, res, next) => {
-  next(AppError.validationError('Email format is invalid'));
-});
-
-// mount the v1 router — all its routes become accessible under /api/v1
-app.use('/api/v1', apiV1);
-
-// 404 handler — runs when no route above matches the request
-app.use((req: Request, res: Response, next: NextFunction) => {
-  next(AppError.notFound(`Route not found: ${req.originalUrl}`));
-});
-
-// global error handler — must always be the last middleware in the chain
-app.use((err: AppError, req: Request, res: Response, next: NextFunction) => {
-  const statusCode = err.statusCode || 500;
-  const message = err.message || 'Something went wrong on the server';
-
-  logger.error(message, { stack: err.stack, path: req.originalUrl });
-
-  res.status(statusCode).json({
-    success: false,
-    message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),   // hide stack trace in production
-  });
-});
+app.use(globalErrorHandler);
 
 export default app;

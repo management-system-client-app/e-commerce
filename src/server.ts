@@ -1,49 +1,86 @@
-import { env } from './config/env';   // also validates required env variables on import
-import app from './app';
+import type { Server } from "http";
+import app from "./app";
+import { env } from "./app/config/env";
+import { prisma } from "./app/config/prisma";
+import logger from "./config/logger";
 
-const PORT = env.PORT;
+let server: Server | undefined;
+let isShuttingDown = false;
 
-// wrapped in try-catch to catch synchronous errors during startup
-try {
-  const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`http://localhost:${PORT}`);
-  });
+const shutdown = (reason: string, exitCode: number): void => {
+  if (isShuttingDown) {
+    return;
+  }
 
-  // handles errors that occur asynchronously during server startup (e.g. port in use)
-  server.on('error', (error: NodeJS.ErrnoException) => {
-    if (error.code === 'EADDRINUSE') {
-      console.error(`Port ${PORT} is already in use. Close the other process or change PORT in .env`);
-    } else {
-      console.error('Server failed to start:', error.message);
-    }
-    process.exit(1);
-  });
+  isShuttingDown = true;
+  logger.info(`${reason} received. Shutting down.`);
 
-  // gracefully closes the server on shutdown signals (e.g. Ctrl+C, deployment restart)
-  const shutdown = (signal: string) => {
-    console.log(`${signal} received. Shutting down gracefully...`);
-    server.close(() => {
-      console.log('Server closed.');
-      process.exit(0);
-    });
+  const closeDatabase = (): void => {
+    prisma
+      .$disconnect()
+      .catch((error: unknown) => {
+        logger.error("Failed to disconnect Prisma", { error });
+      })
+      .finally(() => {
+        process.exit(exitCode);
+      });
   };
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  if (!server) {
+    closeDatabase();
+    return;
+  }
 
-} catch (error) {
-  console.error('Something went wrong while starting the server:', error);
-  process.exit(1);
+  const forceExit = setTimeout(() => {
+    logger.error("Forced shutdown after timeout");
+    process.exit(exitCode);
+  }, 10_000);
+  forceExit.unref();
+
+  server.close(() => {
+    clearTimeout(forceExit);
+    closeDatabase();
+  });
+};
+
+process.on("unhandledRejection", (reason: unknown) => {
+  logger.error("Unhandled promise rejection", { reason });
+  shutdown("unhandledRejection", 1);
+});
+
+process.on("uncaughtException", (error: Error) => {
+  logger.error("Uncaught exception", {
+    message: error.message,
+    stack: error.stack,
+  });
+  shutdown("uncaughtException", 1);
+});
+
+process.on("SIGINT", () => {
+  shutdown("SIGINT", 0);
+});
+
+process.on("SIGTERM", () => {
+  shutdown("SIGTERM", 0);
+});
+
+try {
+  server = app.listen(env.PORT, () => {
+    logger.info(`Server running on http://localhost:${env.PORT}`);
+  });
+
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      logger.error(
+        `Port ${env.PORT} is already in use. Close the other process or change PORT.`,
+      );
+    } else {
+      logger.error("Server failed to start", { message: error.message });
+    }
+
+    shutdown("server-error", 1);
+  });
+} catch (error: unknown) {
+  logger.error("Something went wrong while starting the server", { error });
+  shutdown("startup-error", 1);
 }
-
-// catches promise rejections that weren't handled anywhere else
-process.on('unhandledRejection', (reason) => {
-  console.error('Unhandled Promise Rejection:', reason);
-});
-
-// catches unexpected synchronous crashes
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  process.exit(1);
-});
