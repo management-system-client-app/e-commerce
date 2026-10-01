@@ -1,0 +1,24 @@
+import express, { Router } from "express";
+import { authenticate, authorize } from "../../app/middlewares/auth";
+import { asyncHandler } from "../../app/middlewares/asyncHandler";
+import { validateRequest } from "../../app/middlewares/validateRequest";
+import { paymentController } from "./payment.controller";
+import { createPaymentIntentSchema } from "./payment.validation";
+
+const router = Router();
+
+router.post(
+  "/create-intent",
+  authenticate,
+  authorize("USER"),
+  validateRequest({ body: createPaymentIntentSchema }),
+  asyncHandler(paymentController.createIntent),
+);
+
+router.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  asyncHandler(paymentController.handleWebhook),
+);
+
+export const paymentRoutes = router;
