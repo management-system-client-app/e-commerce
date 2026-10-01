@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler } from "express";
+import multer from "multer";
 import { ZodError } from "zod";
 import { Prisma } from "../../../generated/prisma/client";
 import logger from "../../config/logger";
@@ -99,6 +100,20 @@ const resolveError = (error: unknown): ResolvedError => {
     return {
       statusCode: 400,
       message: "Invalid JSON body",
+    };
+  }
+
+  if (error instanceof multer.MulterError) {
+    const message =
+      error.code === "LIMIT_FILE_SIZE"
+        ? "Each image must be 5MB or smaller"
+        : error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE"
+          ? "You can upload up to 5 images"
+          : "Image upload failed";
+
+    return {
+      statusCode: 400,
+      message,
     };
   }
 
