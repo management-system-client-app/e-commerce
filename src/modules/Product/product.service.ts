@@ -131,7 +131,10 @@ const buildSlug = async (name: string, requestedSlug?: string): Promise<string> 
   return `${slug.slice(0, 174)}-${Math.random().toString(36).slice(2, 6)}`;
 };
 
-const createProduct = async (input: CreateProductInput) => {
+const createProduct = async (
+  input: CreateProductInput,
+  images: { url: string; alt: string }[] = [],
+) => {
   await assertCategoryAndBrand(input.categoryId, input.brandId);
   const slug = await buildSlug(input.name, input.slug);
 
@@ -154,6 +157,18 @@ const createProduct = async (input: CreateProductInput) => {
         metaDescription: input.metaDescription,
         publishedAt:
           (input.status ?? "DRAFT") === "ACTIVE" ? new Date() : undefined,
+        ...(images.length > 0
+          ? {
+              images: {
+                create: images.map((image, index) => ({
+                  url: image.url,
+                  alt: image.alt,
+                  sortOrder: index,
+                  isPrimary: index === 0,
+                })),
+              },
+            }
+          : {}),
       },
       include: productDetailInclude,
     });

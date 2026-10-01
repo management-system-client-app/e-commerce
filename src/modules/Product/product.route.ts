@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
+import { parseMultipartData, productImagesUpload } from "../../app/middlewares/upload";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { productController } from "./product.controller";
 import {
@@ -13,6 +14,8 @@ const router = Router();
 
 router.post(
   "/",
+  productImagesUpload,
+  parseMultipartData,
   validateRequest({ body: createProductSchema }),
   asyncHandler(productController.createProduct),
 );

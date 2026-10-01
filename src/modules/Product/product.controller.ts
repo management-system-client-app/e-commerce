@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { deleteCloudinaryImages, uploadImageBuffer } from "../../app/config/cloudinary";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
 import { productService } from "./product.service";
 import type {
@@ -12,13 +13,30 @@ const createProduct = async (
   req: ValidatedRequest<CreateProductInput>,
   res: Response,
 ): Promise<void> => {
-  const product = await productService.createProduct(req.validatedBody);
+  const files = Array.isArray(req.files) ? req.files : [];
+  const uploaded =
+    files.length === 0
+      ? []
+      : await Promise.all(files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products")));
 
-  res.status(201).json({
-    success: true,
-    message: "Product created",
-    data: product,
-  });
+  try {
+    const product = await productService.createProduct(
+      req.validatedBody,
+      uploaded.map((image) => ({
+        url: image.url,
+        alt: req.validatedBody.name,
+      })),
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Product created",
+      data: product,
+    });
+  } catch (error) {
+    await deleteCloudinaryImages(uploaded.map((image) => image.publicId));
+    throw error;
+  }
 };
 
 const getAllProducts = async (

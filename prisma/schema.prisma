@@ -142,6 +142,7 @@ model User {
   returns            ReturnRequest[]
   couponRedemptions  CouponRedemption[]
   refreshTokens      RefreshToken[]
+  reviews            Review[]
 
   @@index([phone])
   @@index([isActive])
@@ -272,11 +273,30 @@ model Product {
   images     ProductImage[]
   variants   ProductVariant[]
   promotions PromotionProduct[]
+  reviews    Review[]
 
   @@index([brandId])
   @@index([categoryId])
   @@index([status, gender])
   @@index([publishedAt])
+}
+
+/// A buyer can leave one review per product. Purchase is checked in the review service.
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  rating    Int
+  title     String?
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId, createdAt])
 }
 
 model ProductImage {
