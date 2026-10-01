@@ -20,6 +20,9 @@ const envSchema = z.object({
   COOKIE_SECRET: z
     .string()
     .min(10, "COOKIE_SECRET must be at least 10 characters"),
+
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);

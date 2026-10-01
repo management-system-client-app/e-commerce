@@ -33,7 +33,18 @@ app.use(
 
 app.use(compression());
 app.use(cookieParser(env.COOKIE_SECRET));
-app.use(express.json({ limit: "10kb" }));
+
+const jsonParser = express.json({ limit: "10kb" });
+
+app.use((req, res, next) => {
+  if (req.path === "/api/v1/payments/webhook") {
+    next();
+    return;
+  }
+
+  jsonParser(req, res, next);
+});
+
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 
 const morganStream = {
