@@ -110,16 +110,16 @@ Product create accepts JSON, or `multipart/form-data` with a `data` JSON field a
 
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/products` | Public | Create a product. |
+| `POST` | `/api/v1/products` | Admin | Create a product. |
 | `GET` | `/api/v1/products` | Public | List products. Includes category. |
 | `GET` | `/api/v1/products/:id` | Public | Product detail, images, and variants. |
-| `PATCH` | `/api/v1/products/:id` | Public | Update a product. |
-| `DELETE` | `/api/v1/products/:id` | Public | Delete a product that has no variants. |
-| `POST` | `/api/v1/variants` | Public | Create a variant. Requires `productId`. |
+| `PATCH` | `/api/v1/products/:id` | Admin | Update a product. |
+| `DELETE` | `/api/v1/products/:id` | Admin | Delete a product and its variants. Blocked when a variant is on an order or exchange. |
+| `POST` | `/api/v1/variants` | Admin | Create a variant. Requires `productId`. |
 | `GET` | `/api/v1/variants` | Public | List variants. |
 | `GET` | `/api/v1/variants/:id` | Public | Variant detail. |
-| `PATCH` | `/api/v1/variants/:id` | Public | Update a variant. |
-| `DELETE` | `/api/v1/variants/:id` | Public | Delete a variant. |
+| `PATCH` | `/api/v1/variants/:id` | Admin | Update a variant. |
+| `DELETE` | `/api/v1/variants/:id` | Admin | Delete a variant. |
 
 ### Cart and orders
 
