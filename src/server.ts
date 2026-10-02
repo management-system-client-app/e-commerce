@@ -66,7 +66,7 @@ process.on("SIGTERM", () => {
 
 try {
   server = app.listen(env.PORT, () => {
-    logger.info(`Server running on http://localhost:${env.PORT}`);
+    logger.info(`server is running on http://localhost:${env.PORT}`);
   });
 
   server.on("error", (error: NodeJS.ErrnoException) => {

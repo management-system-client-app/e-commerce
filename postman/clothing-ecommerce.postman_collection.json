@@ -216,7 +216,10 @@
         {
           "name": "Create product",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
@@ -231,7 +234,10 @@
         {
           "name": "Update product",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "PATCH",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
@@ -245,11 +251,14 @@
         {
           "name": "Delete product",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "DELETE",
             "header": [],
             "url": "{{baseUrl}}/api/v1/products/{{productId}}",
-            "description": "Fails while the product still has variants."
+            "description": "Deletes the product and its variants. Fails when a variant is already on an order or exchange."
           }
         }
       ]
@@ -288,7 +297,10 @@
         {
           "name": "Create variant",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
@@ -303,7 +315,10 @@
         {
           "name": "Update variant",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "PATCH",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
@@ -317,7 +332,10 @@
         {
           "name": "Delete variant",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "DELETE",
             "header": [],
             "url": "{{baseUrl}}/api/v1/variants/{{variantId}}"

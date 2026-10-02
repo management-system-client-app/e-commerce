@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { authenticate, authorize } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { variantController } from "./variant.controller";
@@ -13,6 +14,8 @@ const router = Router();
 
 router.post(
   "/",
+  authenticate,
+  authorize("ADMIN"),
   validateRequest({ body: createVariantSchema }),
   asyncHandler(variantController.createVariant),
 );
@@ -31,6 +34,8 @@ router.get(
 
 router.patch(
   "/:id",
+  authenticate,
+  authorize("ADMIN"),
   validateRequest({
     params: variantIdParamSchema,
     body: updateVariantSchema,
@@ -40,6 +45,8 @@ router.patch(
 
 router.delete(
   "/:id",
+  authenticate,
+  authorize("ADMIN"),
   validateRequest({ params: variantIdParamSchema }),
   asyncHandler(variantController.deleteVariant),
 );

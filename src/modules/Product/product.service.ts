@@ -269,7 +269,14 @@ const deleteProduct = async (id: string) => {
     where: { id },
     select: {
       id: true,
-      _count: { select: { variants: true } },
+      variants: {
+        select: {
+          id: true,
+          _count: {
+            select: { orderItems: true, exchanges: true },
+          },
+        },
+      },
     },
   });
 
@@ -277,11 +284,26 @@ const deleteProduct = async (id: string) => {
     throw new NotFoundError("Product not found");
   }
 
-  if (existing._count.variants > 0) {
-    throw AppError.conflict("Remove this product's variants before deleting it");
+  const usedVariant = existing.variants.find(
+    (variant) => variant._count.orderItems > 0 || variant._count.exchanges > 0,
+  );
+
+  if (usedVariant) {
+    throw AppError.conflict(
+      "This product is on an order or exchange. Deactivate it instead of deleting it",
+    );
   }
 
-  await prisma.product.delete({ where: { id } });
+  const variantIds = existing.variants.map((variant) => variant.id);
+
+  await prisma.$transaction(async (tx) => {
+    if (variantIds.length > 0) {
+      await tx.cartItem.deleteMany({ where: { variantId: { in: variantIds } } });
+      await tx.productVariant.deleteMany({ where: { id: { in: variantIds } } });
+    }
+
+    await tx.product.delete({ where: { id } });
+  });
 };
 
 export const productService = {

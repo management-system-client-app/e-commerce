@@ -60,10 +60,16 @@ app.use(
 );
 
 app.get("/", (_req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    message: "E-commerce backend is running",
-  });
+  res.status(200).type("html").send(`<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>server is running</title>
+  </head>
+  <body>
+    <h1>server is running</h1>
+  </body>
+</html>`);
 });
 
 app.get("/health", (_req: Request, res: Response) => {

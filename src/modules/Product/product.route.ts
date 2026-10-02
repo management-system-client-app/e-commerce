@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { authenticate, authorize } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { parseMultipartData, productImagesUpload } from "../../app/middlewares/upload";
 import { validateRequest } from "../../app/middlewares/validateRequest";
@@ -14,6 +15,8 @@ const router = Router();
 
 router.post(
   "/",
+  authenticate,
+  authorize("ADMIN"),
   productImagesUpload,
   parseMultipartData,
   validateRequest({ body: createProductSchema }),
@@ -34,6 +37,8 @@ router.get(
 
 router.patch(
   "/:id",
+  authenticate,
+  authorize("ADMIN"),
   validateRequest({
     params: productIdParamSchema,
     body: updateProductSchema,
@@ -43,6 +48,8 @@ router.patch(
 
 router.delete(
   "/:id",
+  authenticate,
+  authorize("ADMIN"),
   validateRequest({ params: productIdParamSchema }),
   asyncHandler(productController.deleteProduct),
 );
