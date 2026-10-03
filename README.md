@@ -65,8 +65,8 @@ npm run seed
 
 The seed creates this admin and a sample catalog (Men, Women, Accessories, plus Classic Oxford Shirt in S, M, L, and XL):
 
-- Email: `admin@store.local`
-- Password: `Admin@12345`
+- Email: `anondo554@gmail.com`
+- Password: `12345678`
 
 4. Start the API.
 
@@ -101,6 +101,7 @@ Login routes allow 10 failed attempts per IP every 15 minutes.
 | `POST` | `/api/v1/users/register` | Public | Create a customer account. |
 | `POST` | `/api/v1/auth/login` | Public | Customer login. Returns a token. |
 | `POST` | `/api/v1/auth/admin/login` | Public | Admin login. Returns a token. |
+| `POST` | `/api/v1/auth/logout` | User or admin | Revoke the current token. |
 | `GET` | `/api/v1/users/me` | User or admin | Current account. |
 | `GET` | `/api/v1/users/:id` | Admin | Fetch one customer. |
 

@@ -1,4 +1,5 @@
 import type { Response } from "express";
+import { AppError } from "../../app/errors/AppError";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
 import { authService } from "./auth.service";
 import type { LoginInput } from "./auth.validation";
@@ -29,7 +30,28 @@ const loginAdmin = async (
   });
 };
 
+const logout = async (req: ValidatedRequest, res: Response): Promise<void> => {
+  if (!req.auth) {
+    throw AppError.unauthorized();
+  }
+
+  const header = req.headers.authorization ?? "";
+  const token = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+
+  if (!token) {
+    throw AppError.unauthorized("Access token is required");
+  }
+
+  await authService.logout(req.auth, token);
+
+  res.status(200).json({
+    success: true,
+    message: "Logged out",
+  });
+};
+
 export const authController = {
   login,
   loginAdmin,
+  logout,
 };
