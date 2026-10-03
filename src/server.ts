@@ -37,6 +37,7 @@ const shutdown = (reason: string, exitCode: number): void => {
   }, 10_000);
   forceExit.unref();
 
+  server.closeAllConnections();
   server.close(() => {
     clearTimeout(forceExit);
     closeDatabase();
@@ -64,12 +65,26 @@ process.on("SIGTERM", () => {
   shutdown("SIGTERM", 0);
 });
 
-try {
-  server = app.listen(env.PORT, () => {
+process.on("SIGTSTP", () => {
+  shutdown("SIGTSTP", 0);
+});
+
+const MAX_BIND_ATTEMPTS = 10;
+
+const listen = (attempt: number): void => {
+  const instance = app.listen(env.PORT, () => {
     logger.info(`server is running on http://localhost:${env.PORT}`);
   });
 
-  server.on("error", (error: NodeJS.ErrnoException) => {
+  server = instance;
+
+  instance.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE" && attempt < MAX_BIND_ATTEMPTS) {
+      logger.warn(`Port ${env.PORT} is busy. Waiting for it to be released.`);
+      setTimeout(() => listen(attempt + 1), 500);
+      return;
+    }
+
     if (error.code === "EADDRINUSE") {
       logger.error(
         `Port ${env.PORT} is already in use. Close the other process or change PORT.`,
@@ -80,6 +95,10 @@ try {
 
     shutdown("server-error", 1);
   });
+};
+
+try {
+  listen(1);
 } catch (error: unknown) {
   logger.error("Something went wrong while starting the server", { error });
   shutdown("startup-error", 1);
