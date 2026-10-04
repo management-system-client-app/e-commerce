@@ -160,17 +160,35 @@ const logout = async (auth: AuthContext, token: string): Promise<void> => {
   });
 };
 
+const printAdminDetails = (admin: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}): void => {
+  console.log(`  name: ${admin.firstName} ${admin.lastName}`);
+  console.log(`  email: ${admin.email}`);
+  console.log(`  role: ${admin.role}`);
+};
+
 const ensureDefaultAdmin = async (): Promise<void> => {
   const existing = await prisma.admin.findUnique({
     where: { email: DEFAULT_ADMIN_EMAIL },
-    select: { id: true },
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+    },
   });
 
   if (existing) {
+    console.log("Admin already exists");
+    printAdminDetails(existing);
     return;
   }
 
-  await prisma.admin.create({
+  const admin = await prisma.admin.create({
     data: {
       firstName: "Anondo",
       lastName: "Admin",
@@ -178,9 +196,17 @@ const ensureDefaultAdmin = async (): Promise<void> => {
       passwordHash: await hashPassword(DEFAULT_ADMIN_PASSWORD),
       role: "SUPER_ADMIN",
     },
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+    },
   });
 
-  console.info(`Default admin created: ${DEFAULT_ADMIN_EMAIL}`);
+  console.log("Default admin created");
+  printAdminDetails(admin);
+  console.log(`  password: ${DEFAULT_ADMIN_PASSWORD}`);
 };
 
 export const authService = {

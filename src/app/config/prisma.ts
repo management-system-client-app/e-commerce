@@ -10,10 +10,7 @@ export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
     adapter: new PrismaPg({ connectionString: env.DATABASE_URL }),
-    log:
-      env.NODE_ENV === "development"
-        ? ["query", "warn", "error"]
-        : ["warn", "error"],
+    log: ["error"],
   });
 
 if (env.NODE_ENV !== "production") {

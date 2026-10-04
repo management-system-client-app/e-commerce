@@ -35,6 +35,7 @@ const devConsoleFormat = winston.format.printf((info) => {
 if (process.env.NODE_ENV === 'development') {
   logger.add(
     new winston.transports.Console({
+      level: "error",
       format: winston.format.combine(
         winston.format.colorize(),
         devConsoleFormat

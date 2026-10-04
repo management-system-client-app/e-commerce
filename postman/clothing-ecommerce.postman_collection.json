@@ -124,12 +124,29 @@
           }
         },
         {
-          "name": "Logout",
+          "name": "Admin logout",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "POST",
             "header": [],
             "url": "{{baseUrl}}/api/v1/auth/logout",
-            "description": "Revokes the customer token in {{userToken}}. For an admin, set the Authorization bearer token to {{adminToken}}."
+            "description": "Run Admin login first. This revokes {{adminToken}}."
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/logout",
+            "description": "Run Customer login first. This revokes {{userToken}}."
           }
         },
         {

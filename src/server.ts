@@ -74,7 +74,7 @@ const MAX_BIND_ATTEMPTS = 10;
 
 const listen = (attempt: number): void => {
   const instance = app.listen(env.PORT, () => {
-    logger.info(`server is running on http://localhost:${env.PORT}`);
+    console.log(`Server is running on http://localhost:${env.PORT}`);
   });
 
   server = instance;
