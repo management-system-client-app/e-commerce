@@ -13,8 +13,8 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
 
-const ADMIN_EMAIL = "admin@store.local";
-const ADMIN_PASSWORD = "Admin@12345";
+const ADMIN_EMAIL = "anondo554@gmail.com";
+const ADMIN_PASSWORD = "12345678";
 
 const categories = [
   { name: "Men", slug: "men", sortOrder: 1 },
@@ -32,23 +32,22 @@ const sizes = [
 const seed = async (): Promise<void> => {
   const passwordHash = await hashPassword(ADMIN_PASSWORD);
 
-  await prisma.admin.upsert({
+const existingAdmin = await prisma.admin.findUnique({
     where: { email: ADMIN_EMAIL },
-    update: {
-      firstName: "Store",
-      lastName: "Admin",
-      passwordHash,
-      role: "SUPER_ADMIN",
-      isActive: true,
-    },
-    create: {
-      firstName: "Store",
-      lastName: "Admin",
-      email: ADMIN_EMAIL,
-      passwordHash,
-      role: "SUPER_ADMIN",
-    },
+    select: { id: true },
   });
+
+  if (!existingAdmin) {
+    await prisma.admin.create({
+      data: {
+        firstName: "Anondo",
+        lastName: "Admin",
+        email: ADMIN_EMAIL,
+        passwordHash,
+        role: "SUPER_ADMIN",
+      },
+    });
+  }
 
   for (const category of categories) {
     await prisma.category.upsert({

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { authenticate } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { authRateLimiter } from "../../app/middlewares/rateLimiter";
 import { validateRequest } from "../../app/middlewares/validateRequest";
@@ -20,5 +21,7 @@ router.post(
   validateRequest({ body: loginSchema }),
   asyncHandler(authController.loginAdmin),
 );
+
+router.post("/logout", authenticate, asyncHandler(authController.logout));
 
 export const authRoutes = router;

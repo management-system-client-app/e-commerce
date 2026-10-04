@@ -3,6 +3,7 @@ import app from "./app";
 import { env } from "./app/config/env";
 import { prisma } from "./app/config/prisma";
 import logger from "./config/logger";
+import { authService } from "./modules/Auth/auth.service";
 
 let server: Server | undefined;
 let isShuttingDown = false;
@@ -73,7 +74,7 @@ const MAX_BIND_ATTEMPTS = 10;
 
 const listen = (attempt: number): void => {
   const instance = app.listen(env.PORT, () => {
-    logger.info(`server is running on http://localhost:${env.PORT}`);
+    console.log(`Server is running on http://localhost:${env.PORT}`);
   });
 
   server = instance;
@@ -97,9 +98,12 @@ const listen = (attempt: number): void => {
   });
 };
 
-try {
-  listen(1);
-} catch (error: unknown) {
-  logger.error("Something went wrong while starting the server", { error });
-  shutdown("startup-error", 1);
-}
+void authService.ensureDefaultAdmin().then(
+  () => {
+    listen(1);
+  },
+  (error: unknown) => {
+    logger.error("Something went wrong while starting the server", { error });
+    shutdown("startup-error", 1);
+  },
+);

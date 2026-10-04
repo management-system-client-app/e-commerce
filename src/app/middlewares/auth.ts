@@ -4,6 +4,7 @@ import type { AdminRole } from "../../../generated/prisma/enums";
 import { env } from "../config/env";
 import { prisma } from "../config/prisma";
 import { AppError } from "../errors/AppError";
+import { isTokenRevoked } from "../../modules/Auth/auth.service";
 import {
   accountRoles,
   type AccessTokenPayload,
@@ -119,6 +120,11 @@ export const authenticate = (
   void (async () => {
     const token = readBearerToken(req.headers.authorization);
     const payload = readPayload(token);
+
+    if (await isTokenRevoked(token)) {
+      throw AppError.unauthorized("Token has been revoked");
+    }
+
     req.auth = await resolveAccount(payload);
     next();
   })().catch(next);

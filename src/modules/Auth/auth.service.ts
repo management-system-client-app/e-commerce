@@ -1,9 +1,15 @@
+import { createHash } from "node:crypto";
+import jwt from "jsonwebtoken";
 import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
+import type { AuthContext } from "../../app/middlewares/auth";
 import { comparePassword, hashPassword } from "../../utils/bcrypt";
 import { generateAccessToken, type AccountRole } from "../../utils/generateToken";
 import type { LoginInput } from "./auth.validation";
+
+const DEFAULT_ADMIN_EMAIL = "anondo554@gmail.com";
+const DEFAULT_ADMIN_PASSWORD = "12345678";
 
 const userSelect = {
   id: true,
@@ -122,7 +128,90 @@ const loginAdmin = async (input: LoginInput) => {
   };
 };
 
+const tokenHashOf = (token: string): string =>
+  createHash("sha256").update(token).digest("hex");
+
+export const isTokenRevoked = async (token: string): Promise<boolean> => {
+  const record = await prisma.refreshToken.findUnique({
+    where: { tokenHash: tokenHashOf(token) },
+    select: { revokedAt: true },
+  });
+
+  return record?.revokedAt != null;
+};
+
+const logout = async (auth: AuthContext, token: string): Promise<void> => {
+  const decoded = jwt.decode(token);
+  const expiresAt =
+    decoded && typeof decoded === "object" && typeof decoded.exp === "number"
+      ? new Date(decoded.exp * 1000)
+      : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+  await prisma.refreshToken.upsert({
+    where: { tokenHash: tokenHashOf(token) },
+    update: { revokedAt: new Date() },
+    create: {
+      tokenHash: tokenHashOf(token),
+      userId: auth.role === "USER" ? auth.id : null,
+      adminId: auth.role === "ADMIN" ? auth.id : null,
+      expiresAt,
+      revokedAt: new Date(),
+    },
+  });
+};
+
+const printAdminDetails = (admin: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: string;
+}): void => {
+  console.log(`  name: ${admin.firstName} ${admin.lastName}`);
+  console.log(`  email: ${admin.email}`);
+  console.log(`  role: ${admin.role}`);
+};
+
+const ensureDefaultAdmin = async (): Promise<void> => {
+  const existing = await prisma.admin.findUnique({
+    where: { email: DEFAULT_ADMIN_EMAIL },
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+    },
+  });
+
+  if (existing) {
+    console.log("Admin already exists");
+    printAdminDetails(existing);
+    return;
+  }
+
+  const admin = await prisma.admin.create({
+    data: {
+      firstName: "Anondo",
+      lastName: "Admin",
+      email: DEFAULT_ADMIN_EMAIL,
+      passwordHash: await hashPassword(DEFAULT_ADMIN_PASSWORD),
+      role: "SUPER_ADMIN",
+    },
+    select: {
+      firstName: true,
+      lastName: true,
+      email: true,
+      role: true,
+    },
+  });
+
+  console.log("Default admin created");
+  printAdminDetails(admin);
+  console.log(`  password: ${DEFAULT_ADMIN_PASSWORD}`);
+};
+
 export const authService = {
   login,
   loginAdmin,
+  logout,
+  ensureDefaultAdmin,
 };
