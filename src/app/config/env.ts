@@ -8,6 +8,10 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(5000),
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  ADMIN_EMAIL: z.email().default("anondo554@gmail.com"),
+  ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters").default("12345678"),
+  ADMIN_FIRST_NAME: z.string().trim().min(1).default("Anondo"),
+  ADMIN_LAST_NAME: z.string().trim().min(1).default("Admin"),
 
   JWT_SECRET: z.string().min(10, "JWT_SECRET must be at least 10 characters"),
   JWT_EXPIRES_IN: z.string().min(1).default("7d"),

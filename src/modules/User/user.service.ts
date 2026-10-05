@@ -3,8 +3,8 @@ import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
 import type { AuthContext } from "../../app/middlewares/auth";
-import { hashPassword } from "../../utils/bcrypt";
-import type { RegisterUserInput } from "./user.validation";
+import { comparePassword, hashPassword } from "../../utils/bcrypt";
+import type { RegisterUserInput, UpdateProfileInput } from "./user.validation";
 
 const publicUserSelect = {
   id: true,
@@ -102,8 +102,78 @@ const getCurrentAccount = async (auth: AuthContext) => {
   };
 };
 
+const updateProfile = async (auth: AuthContext, input: UpdateProfileInput) => {
+  if (input.newPassword) {
+    if (!input.currentPassword) {
+      throw AppError.badRequest("Current password is required");
+    }
+
+    const account =
+      auth.role === "ADMIN"
+        ? await prisma.admin.findUnique({
+            where: { id: auth.id },
+            select: { passwordHash: true },
+          })
+        : await prisma.user.findUnique({
+            where: { id: auth.id },
+            select: { passwordHash: true },
+          });
+
+    if (!account) {
+      throw new NotFoundError("Account not found");
+    }
+
+    const matches = await comparePassword(input.currentPassword, account.passwordHash);
+
+    if (!matches) {
+      throw AppError.unauthorized("Current password is incorrect");
+    }
+  }
+
+  const passwordHash = input.newPassword ? await hashPassword(input.newPassword) : undefined;
+
+  if (auth.role === "ADMIN") {
+    if (input.phone !== undefined || input.avatarUrl !== undefined) {
+      throw AppError.badRequest("Admins can update name and password only");
+    }
+
+    const admin = await prisma.admin.update({
+      where: { id: auth.id },
+      data: {
+        ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+        ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+        ...(passwordHash ? { passwordHash } : {}),
+      },
+      select: publicAdminSelect,
+    });
+
+    return {
+      accountType: "ADMIN" as const,
+      ...admin,
+    };
+  }
+
+  const user = await prisma.user.update({
+    where: { id: auth.id },
+    data: {
+      ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+      ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+      ...(input.phone !== undefined ? { phone: input.phone } : {}),
+      ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
+      ...(passwordHash ? { passwordHash } : {}),
+    },
+    select: publicUserSelect,
+  });
+
+  return {
+    accountType: "USER" as const,
+    ...user,
+  };
+};
+
 export const userService = {
   createUser,
   getUserById,
   getCurrentAccount,
+  updateProfile,
 };

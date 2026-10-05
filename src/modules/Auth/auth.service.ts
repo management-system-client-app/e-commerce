@@ -6,10 +6,8 @@ import { AppError } from "../../app/errors/AppError";
 import type { AuthContext } from "../../app/middlewares/auth";
 import { comparePassword, hashPassword } from "../../utils/bcrypt";
 import { generateAccessToken, type AccountRole } from "../../utils/generateToken";
+import { env } from "../../app/config/env";
 import type { LoginInput } from "./auth.validation";
-
-const DEFAULT_ADMIN_EMAIL = "anondo554@gmail.com";
-const DEFAULT_ADMIN_PASSWORD = "12345678";
 
 const userSelect = {
   id: true,
@@ -173,7 +171,7 @@ const printAdminDetails = (admin: {
 
 const ensureDefaultAdmin = async (): Promise<void> => {
   const existing = await prisma.admin.findUnique({
-    where: { email: DEFAULT_ADMIN_EMAIL },
+    where: { email: env.ADMIN_EMAIL },
     select: {
       firstName: true,
       lastName: true,
@@ -190,10 +188,10 @@ const ensureDefaultAdmin = async (): Promise<void> => {
 
   const admin = await prisma.admin.create({
     data: {
-      firstName: "Anondo",
-      lastName: "Admin",
-      email: DEFAULT_ADMIN_EMAIL,
-      passwordHash: await hashPassword(DEFAULT_ADMIN_PASSWORD),
+      firstName: env.ADMIN_FIRST_NAME,
+      lastName: env.ADMIN_LAST_NAME,
+      email: env.ADMIN_EMAIL,
+      passwordHash: await hashPassword(env.ADMIN_PASSWORD),
       role: "SUPER_ADMIN",
     },
     select: {
@@ -206,7 +204,7 @@ const ensureDefaultAdmin = async (): Promise<void> => {
 
   console.log("Default admin created");
   printAdminDetails(admin);
-  console.log(`  password: ${DEFAULT_ADMIN_PASSWORD}`);
+  console.log(`  password: ${env.ADMIN_PASSWORD}`);
 };
 
 export const authService = {

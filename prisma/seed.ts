@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client";
+import { env } from "../src/app/config/env";
 import { hashPassword } from "../src/utils/bcrypt";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -13,8 +14,8 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: databaseUrl }),
 });
 
-const ADMIN_EMAIL = "anondo554@gmail.com";
-const ADMIN_PASSWORD = "12345678";
+const ADMIN_EMAIL = env.ADMIN_EMAIL;
+const ADMIN_PASSWORD = env.ADMIN_PASSWORD;
 
 const categories = [
   { name: "Men", slug: "men", sortOrder: 1 },
@@ -40,8 +41,8 @@ const existingAdmin = await prisma.admin.findUnique({
   if (!existingAdmin) {
     await prisma.admin.create({
       data: {
-        firstName: "Anondo",
-        lastName: "Admin",
+        firstName: env.ADMIN_FIRST_NAME,
+        lastName: env.ADMIN_LAST_NAME,
         email: ADMIN_EMAIL,
         passwordHash,
         role: "SUPER_ADMIN",

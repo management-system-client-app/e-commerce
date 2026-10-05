@@ -23,9 +23,17 @@ const productListInclude = {
       slug: true,
     },
   },
-  _count: {
+  variants: {
+    where: { isActive: true },
+    orderBy: [{ size: { sortOrder: "asc" as const } }, { sku: "asc" as const }],
     select: {
-      variants: true,
+      id: true,
+      sku: true,
+      price: true,
+      stock: true,
+      reserved: true,
+      size: { select: { id: true, name: true } },
+      fabric: { select: { id: true, name: true } },
     },
   },
 } satisfies Prisma.ProductInclude;
@@ -80,6 +88,13 @@ const slugify = (value: string): string =>
 
 const rethrowWriteError = (error: unknown, duplicateMessage: string): never => {
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+    const target = error.meta?.target;
+    const fields = Array.isArray(target) ? target.join(", ") : String(target ?? "");
+
+    if (fields.includes("sku")) {
+      throw AppError.conflict("A size with this SKU already exists");
+    }
+
     throw AppError.conflict(duplicateMessage);
   }
 
@@ -106,6 +121,42 @@ const assertCategoryAndBrand = async (
   if (brandId && !brand) {
     throw new NotFoundError("Brand not found");
   }
+};
+
+const skuPart = (value: string): string =>
+  value.toUpperCase().replace(/[^A-Z0-9]+/g, "").slice(0, 8) || "ITEM";
+
+const buildSku = (slug: string, sizeName: string, fabricName: string): string => {
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${skuPart(slug)}-${skuPart(sizeName)}-${skuPart(fabricName)}-${suffix}`.slice(0, 64);
+};
+
+const loadSizes = async (sizes: NonNullable<CreateProductInput["sizes"]>) => {
+  const sizeIds = [...new Set(sizes.map((size) => size.sizeId))];
+  const fabricIds = [...new Set(sizes.map((size) => size.fabricId))];
+  const [foundSizes, foundFabrics] = await Promise.all([
+    prisma.size.findMany({
+      where: { id: { in: sizeIds } },
+      select: { id: true, name: true },
+    }),
+    prisma.fabric.findMany({
+      where: { id: { in: fabricIds } },
+      select: { id: true, name: true },
+    }),
+  ]);
+
+  if (foundSizes.length !== sizeIds.length) {
+    throw new NotFoundError("Size not found");
+  }
+
+  if (foundFabrics.length !== fabricIds.length) {
+    throw new NotFoundError("Fabric not found");
+  }
+
+  return {
+    sizeNames: new Map(foundSizes.map((size) => [size.id, size.name])),
+    fabricNames: new Map(foundFabrics.map((fabric) => [fabric.id, fabric.name])),
+  };
 };
 
 const buildSlug = async (name: string, requestedSlug?: string): Promise<string> => {
@@ -137,6 +188,7 @@ const createProduct = async (
 ) => {
   await assertCategoryAndBrand(input.categoryId, input.brandId);
   const slug = await buildSlug(input.name, input.slug);
+  const sizeCatalog = input.sizes?.length ? await loadSizes(input.sizes) : undefined;
 
   try {
     return await prisma.product.create({
@@ -157,6 +209,25 @@ const createProduct = async (
         metaDescription: input.metaDescription,
         publishedAt:
           (input.status ?? "DRAFT") === "ACTIVE" ? new Date() : undefined,
+        ...(input.sizes?.length
+          ? {
+              variants: {
+                create: input.sizes.map((size) => ({
+                  sizeId: size.sizeId,
+                  fabricId: size.fabricId,
+                  stock: size.stock,
+                  price: size.price,
+                  sku:
+                    size.sku ??
+                    buildSku(
+                      slug,
+                      sizeCatalog?.sizeNames.get(size.sizeId) ?? "SIZE",
+                      sizeCatalog?.fabricNames.get(size.fabricId) ?? "FABRIC",
+                    ),
+                })),
+              },
+            }
+          : {}),
         ...(images.length > 0
           ? {
               images: {

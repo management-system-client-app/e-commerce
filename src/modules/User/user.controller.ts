@@ -2,7 +2,7 @@ import type { Response } from "express";
 import { AppError } from "../../app/errors/AppError";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
 import { userService } from "./user.service";
-import type { RegisterUserInput, UserIdParam } from "./user.validation";
+import type { RegisterUserInput, UpdateProfileInput, UserIdParam } from "./user.validation";
 
 const register = async (
   req: ValidatedRequest<RegisterUserInput>,
@@ -31,6 +31,23 @@ const getMe = async (req: ValidatedRequest, res: Response): Promise<void> => {
   });
 };
 
+const updateMe = async (
+  req: ValidatedRequest<UpdateProfileInput>,
+  res: Response,
+): Promise<void> => {
+  if (!req.auth) {
+    throw AppError.unauthorized();
+  }
+
+  const account = await userService.updateProfile(req.auth, req.validatedBody);
+
+  res.status(200).json({
+    success: true,
+    message: "Profile updated",
+    data: account,
+  });
+};
+
 const getUser = async (
   req: ValidatedRequest<unknown, UserIdParam>,
   res: Response,
@@ -47,5 +64,6 @@ const getUser = async (
 export const userController = {
   register,
   getMe,
+  updateMe,
   getUser,
 };

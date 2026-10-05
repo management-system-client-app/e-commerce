@@ -36,7 +36,11 @@ cp .env.example .env
 | --- | --- | --- |
 | `PORT` | No | API port. Defaults to `5000`. |
 | `NODE_ENV` | No | `development`, `production`, or `test`. |
-| `DATABASE_URL` | Yes | PostgreSQL connection string. |
+| `DATABASE_URL` | Yes | PostgreSQL connection string. | 
+| `ADMIN_EMAIL` | No | Default admin email. Defaults to `anondo554@gmail.com`. |
+| `ADMIN_PASSWORD` | No | Default admin password. Defaults to `12345678`. Created only when that email does not exist yet. |
+| `ADMIN_FIRST_NAME` | No | Default admin first name. |
+| `ADMIN_LAST_NAME` | No | Default admin last name. |
 | `JWT_SECRET` | Yes | Access-token signing secret (at least 10 characters). |
 | `JWT_EXPIRES_IN` | No | Access-token lifetime. Defaults to `7d`. |
 | `JWT_REFRESH_SECRET` | Yes | Refresh-token secret (at least 10 characters). |
@@ -54,25 +58,19 @@ cp .env.example .env
 | `SMTP_PASS` | No | SMTP password. |
 | `SMTP_FROM` | No | From address, for example `Store <orders@example.com>`. |
 
-3. Create the `ecommerce` database, then sync the schema and seed sample data.
-
-```bash
-npm run db:push
-npm run seed
-```
-
-`npm run db:migrate` runs `prisma migrate dev` when you want a new migration file. For a local database, `npm run db:push` applies the current `prisma/schema.prisma`.
-
-The seed creates this admin and a sample catalog (Men, Women, Accessories, plus Classic Oxford Shirt in S, M, L, and XL):
-
-- Email: `anondo554@gmail.com`
-- Password: `12345678`
-
-4. Start the API.
+3. Start the API. On a new computer this creates the database named in `DATABASE_URL`, applies the tables, and creates the default admin.
 
 ```bash
 npm run dev
 ```
+
+The terminal prints `Default admin created` the first time, then `Admin already exists` on later starts. The account comes from `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env`.
+
+Admin login is `POST /api/v1/auth/admin/login`.
+
+`npm run seed` is optional. It adds a sample catalog (Men, Women, Accessories, plus Classic Oxford Shirt in S, M, L, and XL) and skips the admin if one already exists.
+
+`npm run db:migrate` runs `prisma migrate dev` when you want a new migration file.
 
 The server listens on `http://localhost:5000`. `GET /health` returns the process status.
 
@@ -103,16 +101,28 @@ Login routes allow 10 failed attempts per IP every 15 minutes.
 | `POST` | `/api/v1/auth/admin/login` | Public | Admin login. Returns a token. |
 | `POST` | `/api/v1/auth/logout` | User or admin | Revoke the current token. |
 | `GET` | `/api/v1/users/me` | User or admin | Current account. |
+| `PATCH` | `/api/v1/users/me` | User or admin | Update the signed-in profile. Customers can change name, phone, avatar, and password. |
 | `GET` | `/api/v1/users/:id` | Admin | Fetch one customer. |
 
 ### Catalog
 
 Product create accepts JSON, or `multipart/form-data` with a `data` JSON field and up to five `images` (JPEG, PNG, or WebP). Image files are stored in Cloudinary and saved on the product.
 
+Catalog options live under `/api/v1/catalog`. Each create response includes `data.id`.
+
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/products` | Admin | Create a product. |
-| `GET` | `/api/v1/products` | Public | List products. Includes category. |
+| `GET` | `/api/v1/catalog` | Public | Brands, categories, sizes, and fabrics in one response. Each item includes `id`. |
+| `POST` | `/api/v1/catalog/brands` | Admin | Create a brand. |
+| `GET` | `/api/v1/catalog/brands` | Public | List brands. |
+| `POST` | `/api/v1/catalog/categories` | Admin | Create a category. Optional `parentId` nests it. |
+| `GET` | `/api/v1/catalog/categories` | Public | List categories. |
+| `POST` | `/api/v1/catalog/sizes` | Admin | Create a size. |
+| `GET` | `/api/v1/catalog/sizes` | Public | List sizes. |
+| `POST` | `/api/v1/catalog/fabrics` | Admin | Create a fabric. |
+| `GET` | `/api/v1/catalog/fabrics` | Public | List fabrics. |
+| `POST` | `/api/v1/products` | Admin | Create a product. Optional `sizes` adds size, fabric, and stock in the same request. SKU is generated when omitted. |
+| `GET` | `/api/v1/products` | Public | List products. Each product includes `variants[].id` for the cart. |
 | `GET` | `/api/v1/products/:id` | Public | Product detail, images, and variants. |
 | `PATCH` | `/api/v1/products/:id` | Admin | Update a product. |
 | `DELETE` | `/api/v1/products/:id` | Admin | Delete a product and its variants. Blocked when a variant is on an order or exchange. |
@@ -129,7 +139,7 @@ Checkout copies the cart into an order and decrements stock. When an admin cance
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/cart` | User | Current cart. |
-| `POST` | `/api/v1/cart/items` | User | Add or increase a variant. |
+| `POST` | `/api/v1/cart/items` | User | Add to cart. Send `productId` when the product has one variant, or `variantId` from `variants[].id`. |
 | `DELETE` | `/api/v1/cart/items/:itemId` | User | Remove a cart line. |
 | `POST` | `/api/v1/orders` | User | Place an order from the cart. |
 | `GET` | `/api/v1/orders` | User or admin | List own orders, or all orders for an admin. |
@@ -143,6 +153,7 @@ A successful Stripe payment marks the payment `PAID` and the order `CONFIRMED`. 
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/payments/create-intent` | User | Create a Stripe Payment Intent for a pending order. |
+| `POST` | `/api/v1/payments/checkout` | User | Create a Stripe Checkout page. Open `data.url` in the browser. |
 | `POST` | `/api/v1/payments/webhook` | Public | Stripe webhook. |
 | `POST` | `/api/v1/returns` | User | Request a return or exchange for a delivered order. |
 | `GET` | `/api/v1/returns` | User or admin | List returns. |

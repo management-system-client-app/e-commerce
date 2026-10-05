@@ -158,6 +158,20 @@
           }
         },
         {
+          "name": "Update profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Rina\",\n  \"lastName\": \"Customer\",\n  \"phone\": \"01700000000\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/users/me",
+            "description": "Uses the customer token. Send currentPassword, newPassword, and confirmPassword together to change the password."
+          }
+        },
+        {
           "name": "Get user by id",
           "request": {
             "auth": {
@@ -167,6 +181,244 @@
             "method": "GET",
             "header": [],
             "url": "{{baseUrl}}/api/v1/users/{{userId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Catalog",
+      "item": [
+        {
+          "name": "Catalog options",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const data = json.data || {};",
+                  "if (data.brands && data.brands[0]) pm.collectionVariables.set('brandId', data.brands[0].id);",
+                  "if (data.categories && data.categories[0]) pm.collectionVariables.set('categoryId', data.categories[0].id);",
+                  "if (data.sizes && data.sizes[0]) pm.collectionVariables.set('sizeId', data.sizes[0].id);",
+                  "if (data.fabrics && data.fabrics[0]) pm.collectionVariables.set('fabricId', data.fabrics[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/catalog",
+            "description": "One call for brand, category, size, and fabric ids."
+          }
+        },
+        {
+          "name": "Create brand",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('brandId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Atelier\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/catalog/brands",
+            "description": "Run Admin login first. The response data.id is the brand id."
+          }
+        },
+        {
+          "name": "List brands",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data[0];",
+                  "if (item) pm.collectionVariables.set('brandId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/catalog/brands"
+          }
+        },
+        {
+          "name": "Create category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('categoryId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Men\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/catalog/categories",
+            "description": "Run Admin login first. The response data.id is the category id."
+          }
+        },
+        {
+          "name": "List categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data[0];",
+                  "if (item) pm.collectionVariables.set('categoryId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/catalog/categories"
+          }
+        },
+        {
+          "name": "Create size",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('sizeId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"M\",\n  \"sortOrder\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/catalog/sizes",
+            "description": "Run Admin login first. The response data.id is the size id."
+          }
+        },
+        {
+          "name": "List sizes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data[0];",
+                  "if (item) pm.collectionVariables.set('sizeId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/catalog/sizes"
+          }
+        },
+        {
+          "name": "Create fabric",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.id) pm.collectionVariables.set('fabricId', json.data.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Cotton\",\n  \"composition\": \"100% cotton\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/catalog/fabrics"
+          }
+        },
+        {
+          "name": "List fabrics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const item = json.data && json.data[0];",
+                  "if (item) pm.collectionVariables.set('fabricId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/catalog/fabrics"
           }
         }
       ]
@@ -183,11 +435,17 @@
                 "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
-                  "const item = json.data && json.data[0];",
+                  "const items = json.data || [];",
+                  "const item = items.find((product) => product.variants && product.variants.length) || items[0];",
                   "if (!item) return;",
                   "pm.collectionVariables.set('productId', item.id);",
                   "if (item.brand) pm.collectionVariables.set('brandId', item.brand.id);",
-                  "if (item.category) pm.collectionVariables.set('categoryId', item.category.id);"
+                  "if (item.category) pm.collectionVariables.set('categoryId', item.category.id);",
+                  "const variant = item.variants && item.variants[0];",
+                  "if (!variant) return;",
+                  "pm.collectionVariables.set('variantId', variant.id);",
+                  "if (variant.size) pm.collectionVariables.set('sizeId', variant.size.id);",
+                  "if (variant.fabric) pm.collectionVariables.set('fabricId', variant.fabric.id);"
                 ]
               }
             }
@@ -197,13 +455,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/products?page=1&limit=20&search=oxford",
+              "raw": "{{baseUrl}}/api/v1/products?page=1&limit=20",
               "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "products"],
               "query": [
                 { "key": "page", "value": "1" },
                 { "key": "limit", "value": "20" },
-                { "key": "search", "value": "oxford" },
+                { "key": "search", "value": "", "disabled": true },
                 { "key": "status", "value": "ACTIVE", "disabled": true },
                 { "key": "gender", "value": "MEN", "disabled": true }
               ]
@@ -241,6 +499,23 @@
         },
         {
           "name": "Create product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const product = json.data;",
+                  "if (!product) return;",
+                  "pm.collectionVariables.set('productId', product.id);",
+                  "const variant = product.variants && product.variants[0];",
+                  "if (!variant) return;",
+                  "pm.collectionVariables.set('variantId', variant.id);"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": {
               "type": "bearer",
@@ -250,11 +525,11 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Linen Overshirt\",\n  \"description\": \"Lightweight linen overshirt.\",\n  \"status\": \"ACTIVE\",\n  \"gender\": \"MEN\",\n  \"fit\": \"RELAXED\",\n  \"basePrice\": 59,\n  \"compareAtPrice\": 79,\n  \"brandId\": \"{{brandId}}\",\n  \"categoryId\": \"{{categoryId}}\",\n  \"tags\": [\"linen\", \"shirt\"]\n}",
+              "raw": "{\n  \"name\": \"Linen Overshirt\",\n  \"description\": \"Lightweight linen overshirt.\",\n  \"status\": \"ACTIVE\",\n  \"gender\": \"MEN\",\n  \"fit\": \"RELAXED\",\n  \"basePrice\": 59,\n  \"compareAtPrice\": 79,\n  \"brandId\": \"{{brandId}}\",\n  \"categoryId\": \"{{categoryId}}\",\n  \"tags\": [\"linen\", \"shirt\"],\n  \"sizes\": [\n    {\n      \"sizeId\": \"{{sizeId}}\",\n      \"fabricId\": \"{{fabricId}}\",\n      \"stock\": 10\n    }\n  ]\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/products",
-            "description": "Run List products first so brandId and categoryId are filled. To upload images, send multipart form-data: a text field named data with this JSON, and one or more files named images."
+            "description": "Run Catalog options first so brandId, categoryId, sizeId, and fabricId are filled. sizes is optional. Omit sku and the server creates one. To upload images, send multipart form-data: a text field named data with this JSON, and one or more files named images."
           }
         },
         {
@@ -331,11 +606,11 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"sizeId\": \"{{sizeId}}\",\n  \"colorId\": \"{{colorId}}\",\n  \"fabricId\": \"{{fabricId}}\",\n  \"sku\": \"NEW-SKU-001\",\n  \"stock\": 10,\n  \"price\": 49\n}",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"sizeId\": \"{{sizeId}}\",\n  \"fabricId\": \"{{fabricId}}\",\n  \"sku\": \"NEW-SKU-001\",\n  \"stock\": 10,\n  \"price\": 49\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/variants",
-            "description": "Size, color, and fabric must be a new combination for this product. Get product fills those ids from the first existing variant."
+            "description": "Size and fabric must be a new combination for this product. Run List products and Create size and Create fabric first."
           }
         },
         {
@@ -413,7 +688,7 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 1\n}",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/cart/items"
@@ -534,6 +809,20 @@
             },
             "url": "{{baseUrl}}/api/v1/payments/create-intent",
             "description": "Requires STRIPE_SECRET_KEY. The order must belong to the customer and be pending."
+          }
+        },
+        {
+          "name": "Create checkout page",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/payments/checkout",
+            "description": "Customer token required. Paste data.url into Chrome to open the Stripe payment page."
           }
         },
         {

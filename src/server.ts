@@ -3,6 +3,7 @@ import app from "./app";
 import { env } from "./app/config/env";
 import { prisma } from "./app/config/prisma";
 import logger from "./config/logger";
+import { bootstrapDatabase } from "./app/config/bootstrapDatabase";
 import { authService } from "./modules/Auth/auth.service";
 
 let server: Server | undefined;
@@ -98,12 +99,14 @@ const listen = (attempt: number): void => {
   });
 };
 
-void authService.ensureDefaultAdmin().then(
-  () => {
+void bootstrapDatabase()
+  .then(() => authService.ensureDefaultAdmin())
+  .then(() => {
     listen(1);
-  },
-  (error: unknown) => {
+  })
+  .catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "Startup failed";
+    console.error(message);
     logger.error("Something went wrong while starting the server", { error });
     shutdown("startup-error", 1);
-  },
-);
+  });
