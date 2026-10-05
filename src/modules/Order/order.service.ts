@@ -92,6 +92,12 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
       throw AppError.badRequest("Your cart is empty");
     }
 
+    if (!cart.paymentMethod) {
+      throw AppError.badRequest("Choose COD or STRIPE before placing the order");
+    }
+
+    const paymentMethod = cart.paymentMethod;
+
     const variants = await tx.productVariant.findMany({
       where: { id: { in: cart.items.map((item) => item.variantId) } },
       include: {
@@ -179,7 +185,7 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
       data: {
         orderNumber: createOrderNumber(),
         userId,
-        status: input.paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
+        status: paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
         subtotal,
         discountAmount: 0,
         shippingAmount: 0,
@@ -209,7 +215,7 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
             lineTotal: line.lineTotal,
           })),
         },
-        ...(input.paymentMethod === "COD"
+        ...(paymentMethod === "COD"
           ? {
               payments: {
                 create: {
@@ -227,8 +233,12 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
     });
 
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+    await tx.cart.update({
+      where: { id: cart.id },
+      data: { paymentMethod: null },
+    });
 
-    return order;
+    return { order, paymentMethod };
   });
 };
 

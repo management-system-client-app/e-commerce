@@ -771,6 +771,23 @@
           }
         },
         {
+          "name": "Choose payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-cart-session", "value": "{{cartSessionId}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"COD\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/cart/payment",
+            "description": "Run after Add cart item and before Place order. paymentMethod is COD or STRIPE. A customer token is required to place the order."
+          }
+        },
+        {
           "name": "Remove cart item",
           "request": {
             "method": "DELETE",
@@ -805,11 +822,11 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"shippingFullName\": \"Rina Buyer\",\n  \"shippingPhone\": \"01700000000\",\n  \"shippingLine1\": \"1 Market Road\",\n  \"shippingCity\": \"Dhaka\",\n  \"shippingPostalCode\": \"1200\",\n  \"shippingCountry\": \"Bangladesh\",\n  \"paymentMethod\": \"COD\"\n}",
+              "raw": "{\n  \"shippingFullName\": \"Rina Buyer\",\n  \"shippingPhone\": \"01700000000\",\n  \"shippingLine1\": \"1 Market Road\",\n  \"shippingCity\": \"Dhaka\",\n  \"shippingPostalCode\": \"1200\",\n  \"shippingCountry\": \"Bangladesh\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/orders",
-            "description": "Uses the signed-in customer's cart. paymentMethod is COD or STRIPE. COD confirms the order and collects cash on delivery. STRIPE returns data.checkoutUrl."
+            "description": "Run Choose payment first. COD confirms the order. STRIPE returns data.checkoutUrl."
           }
         },
         {
