@@ -1,19 +1,71 @@
+import { randomUUID } from "node:crypto";
 import type { Response } from "express";
 import { AppError } from "../../app/errors/AppError";
+import { NotFoundError } from "../../app/errors/NotFoundError";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
-import { cartService } from "./cart.service";
+import {
+  clearCartSessionCookie,
+  readCartSessionId,
+  setCartSessionCookie,
+} from "./cart.session";
+import { cartService, type CartOwner } from "./cart.service";
 import type { AddCartItemInput, CartItemParam } from "./cart.validation";
 
-const requireUserId = (auth: { id: string; role: string } | undefined): string => {
-  if (!auth || auth.role !== "USER") {
-    throw AppError.unauthorized();
+const prepareOwner = async (
+  req: ValidatedRequest,
+  res: Response,
+): Promise<{ kind: "user"; userId: string } | { kind: "guest"; sessionId: string | null }> => {
+  if (req.auth?.role === "ADMIN") {
+    throw AppError.forbidden("You do not have permission to perform this action");
   }
 
-  return auth.id;
+  const sessionId = readCartSessionId(req);
+
+  if (req.auth?.role === "USER") {
+    if (sessionId) {
+      await cartService.mergeGuestCart(req.auth.id, sessionId);
+    }
+
+    clearCartSessionCookie(res);
+    return { kind: "user", userId: req.auth.id };
+  }
+
+  return { kind: "guest", sessionId };
+};
+
+const requireOwner = (
+  owner: { kind: "user"; userId: string } | { kind: "guest"; sessionId: string | null },
+): CartOwner => {
+  if (owner.kind === "user") {
+    return owner;
+  }
+
+  if (!owner.sessionId) {
+    throw new NotFoundError("Cart item not found");
+  }
+
+  return { kind: "guest", sessionId: owner.sessionId };
 };
 
 const getCart = async (req: ValidatedRequest, res: Response): Promise<void> => {
-  const cart = await cartService.getCart(requireUserId(req.auth));
+  const owner = await prepareOwner(req, res);
+
+  if (owner.kind === "guest" && !owner.sessionId) {
+    res.status(200).json({
+      success: true,
+      message: "Cart fetched",
+      data: cartService.emptyCart(),
+    });
+    return;
+  }
+
+  const cartOwner = requireOwner(owner);
+
+  if (cartOwner.kind === "guest") {
+    setCartSessionCookie(res, cartOwner.sessionId);
+  }
+
+  const cart = await cartService.getCart(cartOwner);
 
   res.status(200).json({
     success: true,
@@ -26,7 +78,17 @@ const addItem = async (
   req: ValidatedRequest<AddCartItemInput>,
   res: Response,
 ): Promise<void> => {
-  const cart = await cartService.addItem(requireUserId(req.auth), req.validatedBody);
+  const owner = await prepareOwner(req, res);
+  const cartOwner: CartOwner =
+    owner.kind === "user"
+      ? owner
+      : { kind: "guest", sessionId: owner.sessionId ?? randomUUID() };
+  const cart = await cartService.addItem(cartOwner, req.validatedBody);
+  const sessionId = cartOwner.kind === "guest" ? cartOwner.sessionId : null;
+
+  if (sessionId) {
+    setCartSessionCookie(res, sessionId);
+  }
 
   res.status(200).json({
     success: true,
@@ -39,10 +101,14 @@ const removeItem = async (
   req: ValidatedRequest<unknown, CartItemParam>,
   res: Response,
 ): Promise<void> => {
-  const cart = await cartService.removeItem(
-    requireUserId(req.auth),
-    req.validatedParams.itemId,
-  );
+  const owner = await prepareOwner(req, res);
+  const cartOwner = requireOwner(owner);
+
+  if (cartOwner.kind === "guest") {
+    setCartSessionCookie(res, cartOwner.sessionId);
+  }
+
+  const cart = await cartService.removeItem(cartOwner, req.validatedParams.itemId);
 
   res.status(200).json({
     success: true,

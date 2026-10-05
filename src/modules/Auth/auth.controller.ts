@@ -1,6 +1,8 @@
 import type { Response } from "express";
 import { AppError } from "../../app/errors/AppError";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
+import { cartService } from "../Cart/cart.service";
+import { clearCartSessionCookie, readCartSessionId } from "../Cart/cart.session";
 import { authService } from "./auth.service";
 import type { LoginInput } from "./auth.validation";
 
@@ -9,6 +11,12 @@ const login = async (
   res: Response,
 ): Promise<void> => {
   const result = await authService.login(req.validatedBody);
+  const sessionId = readCartSessionId(req);
+
+  if (sessionId) {
+    await cartService.mergeGuestCart(result.user.id, sessionId);
+    clearCartSessionCookie(res);
+  }
 
   res.status(200).json({
     success: true,

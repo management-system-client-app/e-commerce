@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../app/middlewares/auth";
+import { authenticateOptional } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { cartController } from "./cart.controller";
@@ -7,7 +7,7 @@ import { addCartItemSchema, cartItemParamSchema } from "./cart.validation";
 
 const router = Router();
 
-router.use(authenticate, authorize("USER"));
+router.use(authenticateOptional);
 
 router.get("/", asyncHandler(cartController.getCart));
 

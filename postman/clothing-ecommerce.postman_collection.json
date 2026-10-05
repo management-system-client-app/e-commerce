@@ -17,6 +17,7 @@
     { "key": "brandId", "value": "" },
     { "key": "categoryId", "value": "" },
     { "key": "cartItemId", "value": "" },
+    { "key": "cartSessionId", "value": "" },
     { "key": "orderId", "value": "" },
     { "key": "orderItemId", "value": "" },
     { "key": "returnId", "value": "" },
@@ -656,6 +657,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
+                  "if (json.data && json.data.sessionId) pm.collectionVariables.set('cartSessionId', json.data.sessionId);",
                   "const item = json.data && json.data.items && json.data.items[0];",
                   "if (item) pm.collectionVariables.set('cartItemId', item.id);"
                 ]
@@ -664,7 +666,7 @@
           ],
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [{ "key": "x-cart-session", "value": "{{cartSessionId}}" }],
             "url": "{{baseUrl}}/api/v1/cart"
           }
         },
@@ -677,6 +679,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "const json = pm.response.json();",
+                  "if (json.data && json.data.sessionId) pm.collectionVariables.set('cartSessionId', json.data.sessionId);",
                   "const item = json.data && json.data.items && json.data.items[0];",
                   "if (item) pm.collectionVariables.set('cartItemId', item.id);"
                 ]
@@ -685,7 +688,10 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-cart-session", "value": "{{cartSessionId}}" }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
@@ -698,7 +704,7 @@
           "name": "Remove cart item",
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [{ "key": "x-cart-session", "value": "{{cartSessionId}}" }],
             "url": "{{baseUrl}}/api/v1/cart/items/{{cartItemId}}"
           }
         }

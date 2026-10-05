@@ -130,6 +130,49 @@ export const authenticate = (
   })().catch(next);
 };
 
+const bearerToken = (header: string | undefined): string => {
+  const value = header?.trim() ?? "";
+  if (!value.startsWith("Bearer ")) {
+    return "";
+  }
+
+  return value.slice("Bearer ".length).trim();
+};
+
+export const authenticateOptional = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void => {
+  const token = bearerToken(req.headers.authorization);
+
+  if (!token) {
+    next();
+    return;
+  }
+
+  void (async () => {
+    try {
+      const payload = readPayload(token);
+
+      if (await isTokenRevoked(token)) {
+        next();
+        return;
+      }
+
+      req.auth = await resolveAccount(payload);
+      next();
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === 401) {
+        next();
+        return;
+      }
+
+      throw error;
+    }
+  })().catch(next);
+};
+
 export const authorize =
   (...roles: AccountRole[]) =>
   (req: Request, _res: Response, next: NextFunction): void => {
