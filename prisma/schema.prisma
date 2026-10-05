@@ -63,6 +63,11 @@ enum PaymentProvider {
   COD
 }
 
+enum CheckoutPaymentMethod {
+  COD
+  STRIPE
+}
+
 enum PaymentStatus {
   PENDING
   PROCESSING
@@ -395,11 +400,12 @@ model ProductVariant {
 
 /// One cart per signed-in user, or one cart per guest session.
 model Cart {
-  id        String   @id @default(uuid())
-  userId    String?  @unique
-  sessionId String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String                  @id @default(uuid())
+  userId        String?                 @unique
+  sessionId     String?                 @unique
+  paymentMethod CheckoutPaymentMethod?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
 
   user  User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
   items CartItem[]

@@ -9,7 +9,7 @@ import {
   setCartSessionCookie,
 } from "./cart.session";
 import { cartService, type CartOwner } from "./cart.service";
-import type { AddCartItemInput, CartItemParam } from "./cart.validation";
+import type { AddCartItemInput, CartItemParam, CartPaymentInput } from "./cart.validation";
 
 const prepareOwner = async (
   req: ValidatedRequest,
@@ -97,6 +97,26 @@ const addItem = async (
   });
 };
 
+const choosePayment = async (
+  req: ValidatedRequest<CartPaymentInput>,
+  res: Response,
+): Promise<void> => {
+  const owner = await prepareOwner(req, res);
+  const cartOwner = requireOwner(owner);
+
+  if (cartOwner.kind === "guest") {
+    setCartSessionCookie(res, cartOwner.sessionId);
+  }
+
+  const cart = await cartService.choosePayment(cartOwner, req.validatedBody);
+
+  res.status(200).json({
+    success: true,
+    message: "Payment method saved",
+    data: cart,
+  });
+};
+
 const removeItem = async (
   req: ValidatedRequest<unknown, CartItemParam>,
   res: Response,
@@ -120,5 +140,6 @@ const removeItem = async (
 export const cartController = {
   getCart,
   addItem,
+  choosePayment,
   removeItem,
 };

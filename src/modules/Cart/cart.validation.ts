@@ -23,6 +23,12 @@ export const addCartItemSchema = z
     }
   });
 
+export const cartPaymentSchema = z
+  .object({
+    paymentMethod: z.enum(["COD", "STRIPE"]),
+  })
+  .strict();
+
 export const cartItemParamSchema = z
   .object({
     itemId: z.uuid(),
@@ -30,4 +36,5 @@ export const cartItemParamSchema = z
   .strict();
 
 export type AddCartItemInput = z.infer<typeof addCartItemSchema>;
+export type CartPaymentInput = z.infer<typeof cartPaymentSchema>;
 export type CartItemParam = z.infer<typeof cartItemParamSchema>;

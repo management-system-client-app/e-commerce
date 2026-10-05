@@ -2,7 +2,7 @@ import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
-import type { AddCartItemInput } from "./cart.validation";
+import type { AddCartItemInput, CartPaymentInput } from "./cart.validation";
 
 const cartInclude = {
   items: {
@@ -87,6 +87,7 @@ const toCartView = (cart: CartRecord | null) => {
   return {
     id: cart?.id ?? null,
     sessionId: cart?.sessionId ?? null,
+    paymentMethod: cart?.paymentMethod ?? null,
     items,
     summary: {
       itemCount: items.reduce((total, item) => total + item.quantity, 0),
@@ -284,6 +285,33 @@ const removeItem = async (owner: CartOwner, itemId: string) => {
     throw new NotFoundError("Cart item not found");
   }
 
+  const remaining = await prisma.cartItem.count({ where: { cartId: cart.id } });
+
+  if (remaining === 0) {
+    await prisma.cart.update({
+      where: { id: cart.id },
+      data: { paymentMethod: null },
+    });
+  }
+
+  return getCart(owner);
+};
+
+const choosePayment = async (owner: CartOwner, input: CartPaymentInput) => {
+  const cart = await prisma.cart.findUnique({
+    where: cartWhere(owner),
+    select: { id: true, _count: { select: { items: true } } },
+  });
+
+  if (!cart || cart._count.items === 0) {
+    throw AppError.badRequest("Add an item to the cart before choosing a payment method");
+  }
+
+  await prisma.cart.update({
+    where: { id: cart.id },
+    data: { paymentMethod: input.paymentMethod },
+  });
+
   return getCart(owner);
 };
 
@@ -307,8 +335,8 @@ const mergeGuestCart = async (userId: string, sessionId: string): Promise<void> 
 
     const userCart = await tx.cart.upsert({
       where: { userId },
-      update: {},
-      create: { userId },
+      update: guest.paymentMethod ? { paymentMethod: guest.paymentMethod } : {},
+      create: { userId, paymentMethod: guest.paymentMethod },
       select: { id: true },
     });
 
@@ -375,6 +403,7 @@ export const cartService = {
   emptyCart,
   getCart,
   addItem,
+  choosePayment,
   removeItem,
   mergeGuestCart,
 };

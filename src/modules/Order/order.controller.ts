@@ -29,9 +29,9 @@ const placeOrder = async (
     throw AppError.forbidden("Only customers can place orders");
   }
 
-  const order = await orderService.placeOrder(auth.id, req.validatedBody);
+  const { order, paymentMethod } = await orderService.placeOrder(auth.id, req.validatedBody);
 
-  if (req.validatedBody.paymentMethod === "COD") {
+  if (paymentMethod === "COD") {
     res.status(201).json({
       success: true,
       message: "Order placed. Pay cash on delivery.",
