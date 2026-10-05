@@ -14,6 +14,8 @@ import {
 const router = Router();
 const admin = [authenticate, authorize("ADMIN")] as const;
 
+router.get("/", asyncHandler(catalogController.getCatalog));
+
 router.use("/brands", brandRoutes);
 router.use("/categories", categoryRoutes);
 

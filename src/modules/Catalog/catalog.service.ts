@@ -131,7 +131,33 @@ const getFabrics = async (query: CatalogListQuery) => {
   return { items, meta: listMeta(query, total) };
 };
 
+const getCatalog = async () => {
+  const [brands, categories, sizes, fabrics] = await Promise.all([
+    prisma.brand.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true },
+    }),
+    prisma.category.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, slug: true, parentId: true },
+    }),
+    prisma.size.findMany({
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      select: { id: true, name: true, slug: true, sortOrder: true },
+    }),
+    prisma.fabric.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, slug: true, composition: true },
+    }),
+  ]);
+
+  return { brands, categories, sizes, fabrics };
+};
+
 export const catalogService = {
+  getCatalog,
   createSize,
   getSizes,
   createFabric,

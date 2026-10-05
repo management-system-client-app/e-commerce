@@ -15,6 +15,22 @@ const priceSchema = z
 const optionalText = (max: number) =>
   z.string().trim().min(1).max(max).nullable().optional();
 
+const productSizeSchema = z
+  .object({
+    sizeId: z.uuid(),
+    fabricId: z.uuid(),
+    stock: z.number().int().min(0).default(0),
+    price: priceSchema.nullable().optional(),
+    sku: z
+      .string()
+      .trim()
+      .min(1)
+      .max(64)
+      .transform((value) => value.toUpperCase())
+      .optional(),
+  })
+  .strict();
+
 export const createProductSchema = z
   .object({
     name: z.string().trim().min(2).max(160),
@@ -37,6 +53,7 @@ export const createProductSchema = z
     tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
     metaTitle: optionalText(160),
     metaDescription: optionalText(320),
+    sizes: z.array(productSizeSchema).min(1).max(30).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -49,6 +66,37 @@ export const createProductSchema = z
         path: ["compareAtPrice"],
         message: "compareAtPrice must be greater than basePrice",
       });
+    }
+
+    const combinations = new Set<string>();
+    const skus = new Set<string>();
+
+    for (const [index, size] of (value.sizes ?? []).entries()) {
+      const combination = `${size.sizeId}:${size.fabricId}`;
+
+      if (combinations.has(combination)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sizes", index],
+          message: "This size and fabric is already in the list",
+        });
+      }
+
+      combinations.add(combination);
+
+      if (!size.sku) {
+        continue;
+      }
+
+      if (skus.has(size.sku)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["sizes", index, "sku"],
+          message: "SKU is already used in this list",
+        });
+      }
+
+      skus.add(size.sku);
     }
   });
 

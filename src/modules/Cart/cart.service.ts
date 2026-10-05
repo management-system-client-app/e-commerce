@@ -129,15 +129,81 @@ const getCart = async (userId: string) => {
   return toCartView(cart);
 };
 
+const variantChoice = (variant: {
+  id: string;
+  sku: string;
+  size: { name: string };
+  fabric: { name: string };
+}) => ({
+  path: "variantId",
+  message: `${variant.size.name} / ${variant.fabric.name} (${variant.sku}): ${variant.id}`,
+});
+
+const resolveVariantId = async (input: AddCartItemInput): Promise<string> => {
+  if (input.variantId) {
+    return input.variantId;
+  }
+
+  if (!input.productId) {
+    throw AppError.badRequest("Send productId or variantId");
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: input.productId },
+    select: {
+      name: true,
+      variants: {
+        where: { isActive: true },
+        select: {
+          id: true,
+          sku: true,
+          size: { select: { name: true } },
+          fabric: { select: { name: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+
+  if (!product) {
+    throw new NotFoundError("Product not found");
+  }
+
+  if (product.variants.length === 0) {
+    throw AppError.badRequest(`${product.name} has no size yet. Create a variant first.`);
+  }
+
+  if (product.variants.length === 1) {
+    return product.variants[0].id;
+  }
+
+  throw AppError.badRequest(
+    `${product.name} has more than one size. Send one variantId.`,
+    product.variants.map(variantChoice),
+  );
+};
+
 const addItem = async (userId: string, input: AddCartItemInput) => {
+  const variantId = await resolveVariantId(input);
   const variant = await prisma.productVariant.findUnique({
-    where: { id: input.variantId },
+    where: { id: variantId },
     include: {
       product: { select: { status: true, name: true } },
     },
   });
 
   if (!variant) {
+    const product = await prisma.product.findUnique({
+      where: { id: variantId },
+      select: { id: true },
+    });
+
+    if (product) {
+      throw AppError.badRequest(
+        "That id is a product. Send it as productId, or copy variants[].id from the product.",
+      );
+    }
+
     throw new NotFoundError("Variant not found");
   }
 
@@ -153,7 +219,7 @@ const addItem = async (userId: string, input: AddCartItemInput) => {
       where: {
         cartId_variantId: {
           cartId: cart.id,
-          variantId: input.variantId,
+          variantId,
         },
       },
       select: { id: true, quantity: true },
@@ -173,7 +239,7 @@ const addItem = async (userId: string, input: AddCartItemInput) => {
     await tx.cartItem.create({
       data: {
         cartId: cart.id,
-        variantId: input.variantId,
+        variantId,
         quantity: input.quantity,
       },
     });

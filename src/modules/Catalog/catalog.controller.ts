@@ -7,6 +7,16 @@ import type {
   CreateSizeInput,
 } from "./catalog.validation";
 
+const getCatalog = async (_req: ValidatedRequest, res: Response): Promise<void> => {
+  const catalog = await catalogService.getCatalog();
+
+  res.status(200).json({
+    success: true,
+    message: "Catalog fetched",
+    data: catalog,
+  });
+};
+
 const createSize = async (
   req: ValidatedRequest<CreateSizeInput>,
   res: Response,
@@ -62,6 +72,7 @@ const getFabrics = async (
 };
 
 export const catalogController = {
+  getCatalog,
   createSize,
   getSizes,
   createFabric,
