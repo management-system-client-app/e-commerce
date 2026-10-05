@@ -145,7 +145,7 @@ Checkout copies the cart into an order and decrements stock. When an admin cance
 | `POST` | `/api/v1/cart/items` | User | Add to cart. Send `productId` when the product has one variant, or `variantId` from `variants[].id`. |
 | `POST` | `/api/v1/cart/payment` | User | Save `COD` or `STRIPE` on the cart. Required before an order. |
 | `DELETE` | `/api/v1/cart/items/:itemId` | User | Remove a cart line. |
-| `POST` | `/api/v1/orders` | User | Place an order from the cart. Uses the saved payment method. Cash on delivery confirms the order. Stripe returns `checkoutUrl`. |
+| `POST` | `/api/v1/orders` | User | Place an order from the cart. Uses the saved payment method. Cash on delivery confirms the order. Stripe returns `checkoutUrl`. If the card page cannot be created, the order is cancelled and stock is returned. |
 | `GET` | `/api/v1/orders` | User or admin | List own orders, or all orders for an admin. |
 | `GET` | `/api/v1/orders/:id` | User or admin | Order detail. |
 | `PATCH` | `/api/v1/orders/:id/status` | Admin | Change order status. |

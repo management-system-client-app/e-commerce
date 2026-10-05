@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Clothing E-commerce API",
-    "description": "Local collection for the clothing store API.\n\nStart the server, then run requests in this order:\n1. Admin login (seeded account) or Register + Customer login. Tokens are saved automatically.\n2. List products. The first product id, brand id, and category id are saved.\n3. Get product. The first variant, size, color, and fabric ids are saved.\n4. Add to cart, place an order, then payment, review, or return requests.\n\nSeeded admin: admin@store.local / Admin@12345\nBase URL variable: {{baseUrl}} (http://localhost:5000).",
+    "description": "Start with the folder named 1. Buy a product. Run the requests from top to bottom.\n\nCustomer login: rina@example.com / Password123!\nAdmin login: anondo554@gmail.com / 12345678\n\nCash on delivery confirms the order immediately. Card payment returns data.checkoutUrl. Open that link in Chrome. The order stays PENDING until the card payment succeeds.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -22,13 +22,142 @@
     { "key": "orderId", "value": "" },
     { "key": "orderItemId", "value": "" },
     { "key": "returnId", "value": "" },
-    { "key": "couponId", "value": "" }
+    { "key": "couponId", "value": "" },
+    { "key": "checkoutUrl", "value": "" }
   ],
   "auth": {
     "type": "bearer",
     "bearer": [{ "key": "token", "value": "{{userToken}}", "type": "string" }]
   },
   "item": [
+    {
+      "name": "1. Buy a product",
+      "description": "Run these from top to bottom. Use 4a or 4b, not both, then Place order. For card payment, copy checkoutUrl from the Place order response into Chrome.",
+      "item": [
+        {
+          "name": "1. Customer login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.token) pm.collectionVariables.set('userToken', json.data.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rina@example.com\",\n  \"password\": \"Password123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "Saves the customer token. Later requests use it automatically."
+          }
+        },
+        {
+          "name": "2. List products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "const items = json.data || [];",
+                  "const item = items.find((product) => product.variants && product.variants.length && product.variants[0].stock > 0) || items.find((product) => product.variants && product.variants.length) || items[0];",
+                  "if (!item) return;",
+                  "pm.collectionVariables.set('productId', item.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/products",
+            "description": "Saves productId from the first product that has a size in stock."
+          }
+        },
+        {
+          "name": "3. Add to cart",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/cart/items",
+            "description": "Uses the customer token and the productId from the previous request."
+          }
+        },
+        {
+          "name": "4a. Cash on delivery",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"COD\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/cart/payment",
+            "description": "Choose this OR 4b, then Place order. The order is confirmed and the cash is collected on delivery."
+          }
+        },
+        {
+          "name": "4b. Card payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"STRIPE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/cart/payment",
+            "description": "Choose this OR 4a, then Place order. The order stays pending until the card payment succeeds."
+          }
+        },
+        {
+          "name": "5. Place order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (!json.data) return;",
+                  "pm.collectionVariables.set('orderId', json.data.id);",
+                  "if (json.data.checkoutUrl) pm.collectionVariables.set('checkoutUrl', json.data.checkoutUrl);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shippingFullName\": \"Rina Buyer\",\n  \"shippingPhone\": \"01700000000\",\n  \"shippingLine1\": \"1 Market Road\",\n  \"shippingCity\": \"Dhaka\",\n  \"shippingPostalCode\": \"1200\",\n  \"shippingCountry\": \"Bangladesh\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/orders",
+            "description": "Do not send paymentMethod here. Cash: order status is CONFIRMED. Card: copy data.checkoutUrl into Chrome. Test card 4242 4242 4242 4242."
+          }
+        }
+      ]
+    },
     {
       "name": "Health",
       "item": [
@@ -811,6 +940,7 @@
                   "const json = pm.response.json();",
                   "if (!json.data) return;",
                   "pm.collectionVariables.set('orderId', json.data.id);",
+                  "if (json.data.checkoutUrl) pm.collectionVariables.set('checkoutUrl', json.data.checkoutUrl);",
                   "const line = json.data.items && json.data.items[0];",
                   "if (line) pm.collectionVariables.set('orderItemId', line.id);"
                 ]
@@ -889,6 +1019,7 @@
     },
     {
       "name": "Payments",
+      "description": "Do not start here. Card payment is the checkoutUrl on Place order. Cash is collected later by an admin with Collect cash on delivery.",
       "item": [
         {
           "name": "Create payment intent",

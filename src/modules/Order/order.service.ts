@@ -330,8 +330,53 @@ const updateOrderStatus = async (id: string, input: UpdateOrderStatusInput) => {
   });
 };
 
+const cancelUnpaidOrder = async (orderId: string, reason: string): Promise<void> => {
+  await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: { select: { variantId: true, quantity: true } },
+        payments: { select: { status: true } },
+      },
+    });
+
+    if (!order || order.status !== "PENDING") {
+      return;
+    }
+
+    if (order.payments.some((payment) => payment.status === "PAID")) {
+      return;
+    }
+
+    for (const item of order.items) {
+      await tx.productVariant.update({
+        where: { id: item.variantId },
+        data: { stock: { increment: item.quantity } },
+      });
+    }
+
+    await tx.payment.updateMany({
+      where: {
+        orderId,
+        status: { in: ["PENDING", "PROCESSING", "AUTHORIZED", "FAILED"] },
+      },
+      data: { status: "CANCELLED" },
+    });
+
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        status: "CANCELLED",
+        cancelledAt: new Date(),
+        cancelReason: reason,
+      },
+    });
+  });
+};
+
 export const orderService = {
   placeOrder,
+  cancelUnpaidOrder,
   getOrders,
   getOrder,
   updateOrderStatus,
