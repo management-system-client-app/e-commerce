@@ -43,6 +43,18 @@ const orderDetailInclude = {
       email: true,
     },
   },
+  payments: {
+    orderBy: { createdAt: "desc" as const },
+    select: {
+      id: true,
+      provider: true,
+      status: true,
+      method: true,
+      amount: true,
+      currency: true,
+      paidAt: true,
+    },
+  },
 } satisfies Prisma.OrderInclude;
 
 const transitions: Record<OrderStatusValue, OrderStatusValue[]> = {
@@ -167,7 +179,7 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
       data: {
         orderNumber: createOrderNumber(),
         userId,
-        status: "PENDING",
+        status: input.paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
         subtotal,
         discountAmount: 0,
         shippingAmount: 0,
@@ -197,6 +209,19 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
             lineTotal: line.lineTotal,
           })),
         },
+        ...(input.paymentMethod === "COD"
+          ? {
+              payments: {
+                create: {
+                  provider: "COD" as const,
+                  status: "PENDING" as const,
+                  amount: subtotal,
+                  currency: "USD",
+                  method: "cash_on_delivery",
+                },
+              },
+            }
+          : {}),
       },
       include: orderDetailInclude,
     });

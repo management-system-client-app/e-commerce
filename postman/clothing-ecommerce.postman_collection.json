@@ -805,11 +805,11 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"shippingFullName\": \"Rina Buyer\",\n  \"shippingPhone\": \"01700000000\",\n  \"shippingLine1\": \"1 Market Road\",\n  \"shippingCity\": \"Dhaka\",\n  \"shippingPostalCode\": \"1200\",\n  \"shippingCountry\": \"Bangladesh\"\n}",
+              "raw": "{\n  \"shippingFullName\": \"Rina Buyer\",\n  \"shippingPhone\": \"01700000000\",\n  \"shippingLine1\": \"1 Market Road\",\n  \"shippingCity\": \"Dhaka\",\n  \"shippingPostalCode\": \"1200\",\n  \"shippingCountry\": \"Bangladesh\",\n  \"paymentMethod\": \"COD\"\n}",
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/orders",
-            "description": "Uses the signed-in customer's cart. Add a cart item first."
+            "description": "Uses the signed-in customer's cart. paymentMethod is COD or STRIPE. COD confirms the order and collects cash on delivery. STRIPE returns data.checkoutUrl."
           }
         },
         {
@@ -885,6 +885,24 @@
             },
             "url": "{{baseUrl}}/api/v1/payments/create-intent",
             "description": "Requires STRIPE_SECRET_KEY. The order must belong to the customer and be pending."
+          }
+        },
+        {
+          "name": "Collect cash on delivery",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/payments/cod/collect",
+            "description": "Admin only. Marks a COD order payment as paid after the cash is collected."
           }
         },
         {

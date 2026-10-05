@@ -144,7 +144,7 @@ Checkout copies the cart into an order and decrements stock. When an admin cance
 | `GET` | `/api/v1/cart` | User | Current cart. |
 | `POST` | `/api/v1/cart/items` | User | Add to cart. Send `productId` when the product has one variant, or `variantId` from `variants[].id`. |
 | `DELETE` | `/api/v1/cart/items/:itemId` | User | Remove a cart line. |
-| `POST` | `/api/v1/orders` | User | Place an order from the cart. |
+| `POST` | `/api/v1/orders` | User | Place an order from the cart. `paymentMethod` is `COD` or `STRIPE`. Cash on delivery confirms the order. Stripe returns `checkoutUrl`. |
 | `GET` | `/api/v1/orders` | User or admin | List own orders, or all orders for an admin. |
 | `GET` | `/api/v1/orders/:id` | User or admin | Order detail. |
 | `PATCH` | `/api/v1/orders/:id/status` | Admin | Change order status. |
@@ -156,7 +156,8 @@ A successful Stripe payment marks the payment `PAID` and the order `CONFIRMED`. 
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/payments/create-intent` | User | Create a Stripe Payment Intent for a pending order. |
-| `POST` | `/api/v1/payments/checkout` | User | Create a Stripe Checkout page. Open `data.url` in the browser. |
+| `POST` | `/api/v1/payments/checkout` | User | Create a Stripe Checkout page. Open `data.url` in the browser. Cash on delivery orders are rejected. |
+| `POST` | `/api/v1/payments/cod/collect` | Admin | Mark a cash on delivery payment as collected. |
 | `POST` | `/api/v1/payments/webhook` | Public | Stripe webhook. |
 | `POST` | `/api/v1/returns` | User | Request a return or exchange for a delivered order. |
 | `GET` | `/api/v1/returns` | User or admin | List returns. |

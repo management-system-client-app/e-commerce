@@ -21,6 +21,15 @@ const toMinorUnits = (amount: Prisma.Decimal | number): number => {
   return Math.round(Number(amount) * 100);
 };
 
+const isCashOrder = async (orderId: string): Promise<boolean> => {
+  const payment = await prisma.payment.findFirst({
+    where: { orderId, provider: "COD" },
+    select: { id: true },
+  });
+
+  return payment !== null;
+};
+
 const stripeErrorMessage = (error: unknown): string => {
   if (error instanceof Stripe.errors.StripeError) {
     return error.message;
@@ -43,6 +52,10 @@ const createPaymentIntent = async (userId: string, orderId: string) => {
 
   if (!order || order.userId !== userId) {
     throw new NotFoundError("Order not found");
+  }
+
+  if (await isCashOrder(order.id)) {
+    throw AppError.badRequest("This order is cash on delivery");
   }
 
   if (order.status !== "PENDING") {
@@ -169,6 +182,10 @@ const createCheckoutSession = async (userId: string, orderId: string) => {
 
   if (!order || order.userId !== userId) {
     throw new NotFoundError("Order not found");
+  }
+
+  if (await isCashOrder(order.id)) {
+    throw AppError.badRequest("This order is cash on delivery");
   }
 
   if (order.status !== "PENDING") {
@@ -521,9 +538,40 @@ const handleStripeWebhook = async (rawBody: Buffer, signature: string) => {
   }
 };
 
+const collectCashOnDelivery = async (orderId: string) => {
+  const payment = await prisma.payment.findFirst({
+    where: { orderId, provider: "COD", status: "PENDING" },
+    include: { order: { select: { id: true, status: true } } },
+  });
+
+  if (!payment) {
+    throw new NotFoundError("Cash on delivery payment not found");
+  }
+
+  if (payment.order.status === "CANCELLED") {
+    throw AppError.badRequest("Cancelled orders cannot be collected");
+  }
+
+  const paidAt = new Date();
+
+  const [updated] = await prisma.$transaction([
+    prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: "PAID", paidAt, method: "cash_on_delivery" },
+    }),
+    prisma.order.update({
+      where: { id: orderId },
+      data: { paidAt },
+    }),
+  ]);
+
+  return updated;
+};
+
 export const paymentService = {
   createPaymentIntent,
   createCheckoutSession,
+  collectCashOnDelivery,
   confirmCheckoutSession,
   handleStripeWebhook,
 };
