@@ -105,22 +105,23 @@ export const sendOrderConfirmationEmail = async (input: {
 
 export const sendPasswordResetEmail = async (input: {
   to: string;
-  resetUrl: string;
+  code: string;
   expiresInMinutes?: number;
 }): Promise<void> => {
   const minutes = input.expiresInMinutes ?? 30;
+  const code = escapeHtml(input.code);
   const text = [
     "We received a request to reset your password.",
     "",
-    `Reset it here: ${input.resetUrl}`,
+    `Your reset code is ${input.code}`,
     "",
-    `This link expires in ${minutes} minutes. If you did not ask for this, you can ignore this email.`,
+    `This code expires in ${minutes} minutes. If you did not ask for this, you can ignore this email.`,
   ].join("\n");
 
   await sendEmail({
     to: input.to,
-    subject: "Reset your password",
+    subject: "Your password reset code",
     text,
-    html: `<p>We received a request to reset your password.</p><p><a href="${escapeHtml(input.resetUrl)}">Reset your password</a></p><p>This link expires in ${minutes} minutes. If you did not ask for this, you can ignore this email.</p>`,
+    html: `<p>We received a request to reset your password.</p><p>Your reset code is <strong>${code}</strong></p><p>This code expires in ${minutes} minutes. If you did not ask for this, you can ignore this email.</p>`,
   });
 };

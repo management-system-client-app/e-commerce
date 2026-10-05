@@ -99,6 +99,9 @@ Login routes allow 10 failed attempts per IP every 15 minutes.
 | `POST` | `/api/v1/users/register` | Public | Create a customer account. |
 | `POST` | `/api/v1/auth/login` | Public | Customer login. Returns a token. |
 | `POST` | `/api/v1/auth/admin/login` | Public | Admin login. Returns a token. |
+| `POST` | `/api/v1/auth/forgot-password` | Public | Email a 6-digit customer reset code. Unknown emails get the same response. |
+| `POST` | `/api/v1/auth/admin/forgot-password` | Public | Email a 6-digit admin reset code. Unknown emails get the same response. |
+| `POST` | `/api/v1/auth/reset-password` | Public | Set a new password with the email and the 6-digit code. |
 | `POST` | `/api/v1/auth/logout` | User or admin | Revoke the current token. |
 | `GET` | `/api/v1/users/me` | User or admin | Current account. |
 | `PATCH` | `/api/v1/users/me` | User or admin | Update the signed-in profile. Customers can change name, phone, avatar, and password. |

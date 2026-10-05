@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import jwt from "jsonwebtoken";
 import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../app/config/prisma";
@@ -7,7 +7,8 @@ import type { AuthContext } from "../../app/middlewares/auth";
 import { comparePassword, hashPassword } from "../../utils/bcrypt";
 import { generateAccessToken, type AccountRole } from "../../utils/generateToken";
 import { env } from "../../app/config/env";
-import type { LoginInput } from "./auth.validation";
+import { sendPasswordResetEmail } from "../../utils/emailSender";
+import type { ForgotPasswordInput, LoginInput, ResetPasswordInput } from "./auth.validation";
 
 const userSelect = {
   id: true,
@@ -129,6 +130,172 @@ const loginAdmin = async (input: LoginInput) => {
 const tokenHashOf = (token: string): string =>
   createHash("sha256").update(token).digest("hex");
 
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+
+type ResetOwner = { userId: string; adminId?: never } | { adminId: string; userId?: never };
+
+const resetCode = (): string => randomInt(0, 1_000_000).toString().padStart(6, "0");
+
+const codeHashOf = (ownerId: string, code: string): string => tokenHashOf(`${ownerId}:${code}`);
+
+const issuePasswordReset = async (
+  email: string,
+  owner: ResetOwner | null,
+): Promise<{ code?: string }> => {
+  if (!owner) {
+    return {};
+  }
+
+  const code = resetCode();
+  const ownerId = owner.userId ?? owner.adminId;
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+  const ownerWhere = owner.userId ? { userId: owner.userId } : { adminId: owner.adminId };
+
+  await prisma.$transaction([
+    prisma.passwordResetToken.deleteMany({
+      where: { ...ownerWhere, usedAt: null },
+    }),
+    prisma.passwordResetToken.create({
+      data: {
+        tokenHash: codeHashOf(ownerId, code),
+        expiresAt,
+        ...ownerWhere,
+      },
+    }),
+  ]);
+
+  try {
+    await sendPasswordResetEmail({
+      to: email,
+      code,
+      expiresInMinutes: 30,
+    });
+    return {};
+  } catch (error) {
+    if (env.NODE_ENV === "production") {
+      throw new AppError("Could not send the reset email", 503);
+    }
+
+    console.error(
+      "Password reset email was not sent. Use the code in the response.",
+      error instanceof Error ? error.message : error,
+    );
+    return { code };
+  }
+};
+
+const forgotPassword = async (input: ForgotPasswordInput): Promise<{ code?: string }> => {
+  const user = await prisma.user.findUnique({
+    where: { email: input.email },
+    select: { id: true, isActive: true },
+  });
+
+  if (!user || !user.isActive) {
+    return issuePasswordReset(input.email, null);
+  }
+
+  return issuePasswordReset(input.email, { userId: user.id });
+};
+
+const forgotAdminPassword = async (
+  input: ForgotPasswordInput,
+): Promise<{ code?: string }> => {
+  const admin = await prisma.admin.findUnique({
+    where: { email: input.email },
+    select: { id: true, isActive: true },
+  });
+
+  if (!admin || !admin.isActive) {
+    return issuePasswordReset(input.email, null);
+  }
+
+  return issuePasswordReset(input.email, { adminId: admin.id });
+};
+
+const findResetOwner = async (
+  email: string,
+  code: string,
+): Promise<{ userId: string } | { adminId: string } | null> => {
+  const now = new Date();
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true, isActive: true },
+  });
+
+  if (user?.isActive) {
+    const match = await prisma.passwordResetToken.findFirst({
+      where: {
+        userId: user.id,
+        tokenHash: codeHashOf(user.id, code),
+        usedAt: null,
+        expiresAt: { gt: now },
+      },
+      select: { id: true },
+    });
+
+    if (match) {
+      return { userId: user.id };
+    }
+  }
+
+  const admin = await prisma.admin.findUnique({
+    where: { email },
+    select: { id: true, isActive: true },
+  });
+
+  if (!admin?.isActive) {
+    return null;
+  }
+
+  const match = await prisma.passwordResetToken.findFirst({
+    where: {
+      adminId: admin.id,
+      tokenHash: codeHashOf(admin.id, code),
+      usedAt: null,
+      expiresAt: { gt: now },
+    },
+    select: { id: true },
+  });
+
+  return match ? { adminId: admin.id } : null;
+};
+
+const resetPassword = async (input: ResetPasswordInput): Promise<void> => {
+  const owner = await findResetOwner(input.email, input.code);
+
+  if (!owner) {
+    throw AppError.badRequest("Reset code is invalid or has expired");
+  }
+
+  const passwordHash = await hashPassword(input.password);
+  const usedAt = new Date();
+
+  if ("userId" in owner) {
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: owner.userId },
+        data: { passwordHash },
+      }),
+      prisma.passwordResetToken.updateMany({
+        where: { userId: owner.userId, usedAt: null },
+        data: { usedAt },
+      }),
+    ]);
+    return;
+  }
+
+  await prisma.$transaction([
+    prisma.admin.update({
+      where: { id: owner.adminId },
+      data: { passwordHash },
+    }),
+    prisma.passwordResetToken.updateMany({
+      where: { adminId: owner.adminId, usedAt: null },
+      data: { usedAt },
+    }),
+  ]);
+};
+
 export const isTokenRevoked = async (token: string): Promise<boolean> => {
   const record = await prisma.refreshToken.findUnique({
     where: { tokenHash: tokenHashOf(token) },
@@ -211,5 +378,8 @@ export const authService = {
   login,
   loginAdmin,
   logout,
+  forgotPassword,
+  forgotAdminPassword,
+  resetPassword,
   ensureDefaultAdmin,
 };
