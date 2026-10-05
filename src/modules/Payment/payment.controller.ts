@@ -24,6 +24,19 @@ const createIntent = async (
   });
 };
 
+const collectCash = async (
+  req: ValidatedRequest<CreatePaymentIntentInput>,
+  res: Response,
+): Promise<void> => {
+  const payment = await paymentService.collectCashOnDelivery(req.validatedBody.orderId);
+
+  res.status(200).json({
+    success: true,
+    message: "Cash collected",
+    data: payment,
+  });
+};
+
 const createCheckout = async (
   req: ValidatedRequest<CreatePaymentIntentInput>,
   res: Response,
@@ -109,6 +122,7 @@ const handleWebhook = async (req: Request, res: Response): Promise<void> => {
 
 export const paymentController = {
   createIntent,
+  collectCash,
   createCheckout,
   checkoutSuccess,
   checkoutCancel,

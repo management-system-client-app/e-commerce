@@ -16,6 +16,14 @@ router.post(
 );
 
 router.post(
+  "/cod/collect",
+  authenticate,
+  authorize("ADMIN"),
+  validateRequest({ body: createPaymentIntentSchema }),
+  asyncHandler(paymentController.collectCash),
+);
+
+router.post(
   "/checkout",
   authenticate,
   authorize("USER"),

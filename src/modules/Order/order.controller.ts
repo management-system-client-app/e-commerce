@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { AppError } from "../../app/errors/AppError";
 import type { AuthContext } from "../../app/middlewares/auth";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
+import { paymentService } from "../Payment/payment.service";
 import { orderService } from "./order.service";
 import type {
   OrderIdParam,
@@ -30,11 +31,45 @@ const placeOrder = async (
 
   const order = await orderService.placeOrder(auth.id, req.validatedBody);
 
-  res.status(201).json({
-    success: true,
-    message: "Order placed",
-    data: order,
-  });
+  if (req.validatedBody.paymentMethod === "COD") {
+    res.status(201).json({
+      success: true,
+      message: "Order placed. Pay cash on delivery.",
+      data: {
+        ...order,
+        paymentMethod: "COD",
+        checkoutUrl: null,
+      },
+    });
+    return;
+  }
+
+  try {
+    const checkout = await paymentService.createCheckoutSession(auth.id, order.id);
+
+    res.status(201).json({
+      success: true,
+      message: "Order placed. Open checkoutUrl to pay.",
+      data: {
+        ...order,
+        paymentMethod: "STRIPE",
+        checkoutUrl: checkout.url,
+      },
+    });
+  } catch (error) {
+    const paymentError = error instanceof Error ? error.message : "Payment page could not be created";
+
+    res.status(201).json({
+      success: true,
+      message: "Order placed. Create a checkout page for this order to pay.",
+      data: {
+        ...order,
+        paymentMethod: "STRIPE",
+        checkoutUrl: null,
+        paymentError,
+      },
+    });
+  }
 };
 
 const getOrders = async (

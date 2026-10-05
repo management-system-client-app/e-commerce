@@ -23,6 +23,7 @@ export const placeOrderSchema = z
     shippingPostalCode: z.string().trim().min(1).max(20),
     shippingCountry: z.string().trim().min(2).max(80),
     customerNote: z.string().trim().min(1).max(500).optional(),
+    paymentMethod: z.enum(["COD", "STRIPE"]),
   })
   .strict();
 
