@@ -136,7 +136,7 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
         productName: variant.product.name,
         sku: variant.sku,
         size: variant.size.name,
-        color: variant.color.name,
+        color: variant.color?.name ?? "",
         fabric: variant.fabric.name,
         imageUrl: image?.url,
         quantity: item.quantity,

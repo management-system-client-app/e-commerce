@@ -358,7 +358,7 @@ model ProductVariant {
   id             String   @id @default(uuid())
   productId      String
   sizeId         String
-  colorId        String
+  colorId        String?
   fabricId       String
   sku            String   @unique
   barcode        String?  @unique
@@ -375,7 +375,7 @@ model ProductVariant {
 
   product    Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
   size       Size        @relation(fields: [sizeId], references: [id], onDelete: Restrict)
-  color      Color       @relation(fields: [colorId], references: [id], onDelete: Restrict)
+  color      Color?      @relation(fields: [colorId], references: [id], onDelete: Restrict)
   fabric     Fabric      @relation(fields: [fabricId], references: [id], onDelete: Restrict)
   cartItems  CartItem[]
   orderItems OrderItem[]

@@ -16,6 +16,17 @@ router.post(
 );
 
 router.post(
+  "/checkout",
+  authenticate,
+  authorize("USER"),
+  validateRequest({ body: createPaymentIntentSchema }),
+  asyncHandler(paymentController.createCheckout),
+);
+
+router.get("/checkout/success", asyncHandler(paymentController.checkoutSuccess));
+router.get("/checkout/cancel", asyncHandler(paymentController.checkoutCancel));
+
+router.post(
   "/webhook",
   express.raw({ type: "application/json" }),
   asyncHandler(paymentController.handleWebhook),

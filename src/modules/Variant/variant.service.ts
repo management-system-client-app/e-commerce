@@ -104,12 +104,31 @@ const assertRelations = async (input: {
 const createVariant = async (input: CreateVariantInput) => {
   await assertRelations(input);
 
+  const colorId = input.colorId ?? null;
+  const duplicate = await prisma.productVariant.findFirst({
+    where: {
+      productId: input.productId,
+      sizeId: input.sizeId,
+      fabricId: input.fabricId,
+      colorId,
+    },
+    select: { id: true },
+  });
+
+  if (duplicate) {
+    throw AppError.conflict(
+      colorId
+        ? "This size, color, and fabric combination already exists for the product"
+        : "This size and fabric combination already exists for the product",
+    );
+  }
+
   try {
     return await prisma.productVariant.create({
       data: {
         productId: input.productId,
         sizeId: input.sizeId,
-        colorId: input.colorId,
+        colorId,
         fabricId: input.fabricId,
         sku: input.sku,
         barcode: input.barcode,

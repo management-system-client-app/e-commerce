@@ -20,11 +20,16 @@ const booleanQuerySchema = z
   .optional()
   .transform((value) => (value === undefined ? undefined : value === "true"));
 
+const optionalUuid = z.preprocess(
+  (value) => (value === "" || value === null ? undefined : value),
+  z.uuid().optional(),
+);
+
 export const createVariantSchema = z
   .object({
     productId: z.uuid(),
     sizeId: z.uuid(),
-    colorId: z.uuid(),
+    colorId: optionalUuid,
     fabricId: z.uuid(),
     sku: skuSchema,
     barcode: z.string().trim().min(1).max(64).nullable().optional(),
@@ -49,7 +54,7 @@ export const createVariantSchema = z
 export const updateVariantSchema = z
   .object({
     sizeId: z.uuid().optional(),
-    colorId: z.uuid().optional(),
+    colorId: optionalUuid,
     fabricId: z.uuid().optional(),
     sku: skuSchema.optional(),
     barcode: z.string().trim().min(1).max(64).nullable().optional(),

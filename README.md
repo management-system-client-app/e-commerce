@@ -103,14 +103,25 @@ Login routes allow 10 failed attempts per IP every 15 minutes.
 | `POST` | `/api/v1/auth/admin/login` | Public | Admin login. Returns a token. |
 | `POST` | `/api/v1/auth/logout` | User or admin | Revoke the current token. |
 | `GET` | `/api/v1/users/me` | User or admin | Current account. |
+| `PATCH` | `/api/v1/users/me` | User or admin | Update the signed-in profile. Customers can change name, phone, avatar, and password. |
 | `GET` | `/api/v1/users/:id` | Admin | Fetch one customer. |
 
 ### Catalog
 
 Product create accepts JSON, or `multipart/form-data` with a `data` JSON field and up to five `images` (JPEG, PNG, or WebP). Image files are stored in Cloudinary and saved on the product.
 
+Catalog options live under `/api/v1/catalog`. Each create response includes `data.id`.
+
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
+| `POST` | `/api/v1/catalog/brands` | Admin | Create a brand. |
+| `GET` | `/api/v1/catalog/brands` | Public | List brands. |
+| `POST` | `/api/v1/catalog/categories` | Admin | Create a category. Optional `parentId` nests it. |
+| `GET` | `/api/v1/catalog/categories` | Public | List categories. |
+| `POST` | `/api/v1/catalog/sizes` | Admin | Create a size. |
+| `GET` | `/api/v1/catalog/sizes` | Public | List sizes. |
+| `POST` | `/api/v1/catalog/fabrics` | Admin | Create a fabric. |
+| `GET` | `/api/v1/catalog/fabrics` | Public | List fabrics. |
 | `POST` | `/api/v1/products` | Admin | Create a product. |
 | `GET` | `/api/v1/products` | Public | List products. Includes category. |
 | `GET` | `/api/v1/products/:id` | Public | Product detail, images, and variants. |
@@ -143,6 +154,7 @@ A successful Stripe payment marks the payment `PAID` and the order `CONFIRMED`. 
 | Method | Path | Access | Purpose |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/payments/create-intent` | User | Create a Stripe Payment Intent for a pending order. |
+| `POST` | `/api/v1/payments/checkout` | User | Create a Stripe Checkout page. Open `data.url` in the browser. |
 | `POST` | `/api/v1/payments/webhook` | Public | Stripe webhook. |
 | `POST` | `/api/v1/returns` | User | Request a return or exchange for a delivered order. |
 | `GET` | `/api/v1/returns` | User or admin | List returns. |
