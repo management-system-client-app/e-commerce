@@ -86,6 +86,7 @@ const toCartView = (cart: CartRecord | null) => {
 
   return {
     id: cart?.id ?? null,
+    sessionId: cart?.sessionId ?? null,
     items,
     summary: {
       itemCount: items.reduce((total, item) => total + item.quantity, 0),
@@ -94,11 +95,20 @@ const toCartView = (cart: CartRecord | null) => {
   };
 };
 
-const getCartRecord = (userId: string) =>
+export type CartOwner =
+  | { kind: "user"; userId: string }
+  | { kind: "guest"; sessionId: string };
+
+const cartWhere = (owner: CartOwner) =>
+  owner.kind === "user" ? { userId: owner.userId } : { sessionId: owner.sessionId };
+
+const getCartRecord = (owner: CartOwner) =>
   prisma.cart.findUnique({
-    where: { userId },
+    where: cartWhere(owner),
     include: cartInclude,
   });
+
+const emptyCart = () => toCartView(null);
 
 const assertPurchasable = (
   variant: {
@@ -124,8 +134,8 @@ const assertPurchasable = (
   }
 };
 
-const getCart = async (userId: string) => {
-  const cart = await getCartRecord(userId);
+const getCart = async (owner: CartOwner) => {
+  const cart = await getCartRecord(owner);
   return toCartView(cart);
 };
 
@@ -183,7 +193,7 @@ const resolveVariantId = async (input: AddCartItemInput): Promise<string> => {
   );
 };
 
-const addItem = async (userId: string, input: AddCartItemInput) => {
+const addItem = async (owner: CartOwner, input: AddCartItemInput) => {
   const variantId = await resolveVariantId(input);
   const variant = await prisma.productVariant.findUnique({
     where: { id: variantId },
@@ -208,12 +218,20 @@ const addItem = async (userId: string, input: AddCartItemInput) => {
   }
 
   await prisma.$transaction(async (tx) => {
-    const cart = await tx.cart.upsert({
-      where: { userId },
-      update: {},
-      create: { userId },
-      select: { id: true },
-    });
+    const cart =
+      owner.kind === "user"
+        ? await tx.cart.upsert({
+            where: { userId: owner.userId },
+            update: {},
+            create: { userId: owner.userId },
+            select: { id: true },
+          })
+        : await tx.cart.upsert({
+            where: { sessionId: owner.sessionId },
+            update: {},
+            create: { sessionId: owner.sessionId },
+            select: { id: true },
+          });
 
     const existing = await tx.cartItem.findUnique({
       where: {
@@ -245,12 +263,12 @@ const addItem = async (userId: string, input: AddCartItemInput) => {
     });
   });
 
-  return getCart(userId);
+  return getCart(owner);
 };
 
-const removeItem = async (userId: string, itemId: string) => {
+const removeItem = async (owner: CartOwner, itemId: string) => {
   const cart = await prisma.cart.findUnique({
-    where: { userId },
+    where: cartWhere(owner),
     select: { id: true },
   });
 
@@ -266,11 +284,97 @@ const removeItem = async (userId: string, itemId: string) => {
     throw new NotFoundError("Cart item not found");
   }
 
-  return getCart(userId);
+  return getCart(owner);
+};
+
+const mergeGuestCart = async (userId: string, sessionId: string): Promise<void> => {
+  await prisma.$transaction(async (tx) => {
+    const guest = await tx.cart.findUnique({
+      where: { sessionId },
+      include: {
+        items: { select: { variantId: true, quantity: true } },
+      },
+    });
+
+    if (!guest || guest.userId) {
+      return;
+    }
+
+    if (guest.items.length === 0) {
+      await tx.cart.delete({ where: { id: guest.id } });
+      return;
+    }
+
+    const userCart = await tx.cart.upsert({
+      where: { userId },
+      update: {},
+      create: { userId },
+      select: { id: true },
+    });
+
+    const variants = await tx.productVariant.findMany({
+      where: { id: { in: guest.items.map((item) => item.variantId) } },
+      select: {
+        id: true,
+        isActive: true,
+        stock: true,
+        reserved: true,
+        product: { select: { status: true } },
+      },
+    });
+    const variantById = new Map(variants.map((variant) => [variant.id, variant]));
+
+    for (const item of guest.items) {
+      const variant = variantById.get(item.variantId);
+
+      if (!variant || !variant.isActive || variant.product.status !== "ACTIVE") {
+        continue;
+      }
+
+      const existing = await tx.cartItem.findUnique({
+        where: {
+          cartId_variantId: {
+            cartId: userCart.id,
+            variantId: item.variantId,
+          },
+        },
+        select: { id: true, quantity: true },
+      });
+
+      const nextQuantity = Math.min(
+        (existing?.quantity ?? 0) + item.quantity,
+        availableQuantityOf(variant),
+      );
+
+      if (nextQuantity <= 0) {
+        continue;
+      }
+
+      if (existing) {
+        await tx.cartItem.update({
+          where: { id: existing.id },
+          data: { quantity: nextQuantity },
+        });
+        continue;
+      }
+
+      await tx.cartItem.create({
+        data: {
+          cartId: userCart.id,
+          variantId: item.variantId,
+          quantity: nextQuantity,
+        },
+      });
+    }
+
+    await tx.cart.delete({ where: { id: guest.id } });
+  });
 };
 
 export const cartService = {
+  emptyCart,
   getCart,
   addItem,
   removeItem,
+  mergeGuestCart,
 };

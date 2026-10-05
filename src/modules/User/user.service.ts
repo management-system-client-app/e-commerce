@@ -52,6 +52,7 @@ const createUser = async (input: RegisterUserInput) => {
         email: input.email,
         passwordHash,
         phone: input.phone,
+        isEmailVerified: true,
       },
       select: publicUserSelect,
     });
