@@ -9,6 +9,7 @@
     { "key": "userToken", "value": "" },
     { "key": "adminToken", "value": "" },
     { "key": "userId", "value": "" },
+    { "key": "resetCode", "value": "" },
     { "key": "productId", "value": "" },
     { "key": "variantId", "value": "" },
     { "key": "sizeId", "value": "" },
@@ -99,6 +100,48 @@
           }
         },
         {
+          "name": "Forgot password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.code) pm.collectionVariables.set('resetCode', json.data.code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rina@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/forgot-password",
+            "description": "Emails a 6-digit code. Unknown emails get the same message. In development, when email cannot be sent, data.code is returned and saved as resetCode."
+          }
+        },
+        {
+          "name": "Reset password",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"rina@example.com\",\n  \"code\": \"{{resetCode}}\",\n  \"password\": \"NewPassword123!\",\n  \"confirmPassword\": \"NewPassword123!\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/reset-password",
+            "description": "Paste the 6-digit code from the email. For an admin reset, use the admin email. The code expires in 30 minutes and works once."
+          }
+        },
+        {
           "name": "Admin login",
           "event": [
             {
@@ -122,6 +165,33 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": "{{baseUrl}}/api/v1/auth/admin/login"
+          }
+        },
+        {
+          "name": "Admin forgot password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.data && json.data.code) pm.collectionVariables.set('resetCode', json.data.code);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"anondo554@gmail.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/v1/auth/admin/forgot-password",
+            "description": "Emails a 6-digit admin code. Then run Reset password with this admin email and resetCode."
           }
         },
         {

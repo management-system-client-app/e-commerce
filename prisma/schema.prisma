@@ -142,6 +142,7 @@ model User {
   returns            ReturnRequest[]
   couponRedemptions  CouponRedemption[]
   refreshTokens      RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
   reviews            Review[]
 
   @@index([phone])
@@ -160,8 +161,9 @@ model Admin {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  refreshTokens   RefreshToken[]
-  reviewedReturns ReturnRequest[] @relation("ReturnReviewer")
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  reviewedReturns     ReturnRequest[] @relation("ReturnReviewer")
 
   @@index([role])
   @@index([isActive])
@@ -176,6 +178,25 @@ model RefreshToken {
   adminId   String?
   expiresAt DateTime
   revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin Admin? @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([adminId])
+  @@index([expiresAt])
+}
+
+/// Stores a hash of a one-time password reset token, never the raw token.
+/// Exactly one of userId or adminId is set.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String?
+  adminId   String?
+  expiresAt DateTime
+  usedAt    DateTime?
   createdAt DateTime  @default(now())
 
   user  User?  @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -4,7 +4,7 @@ import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
 import { cartService } from "../Cart/cart.service";
 import { clearCartSessionCookie, readCartSessionId } from "../Cart/cart.session";
 import { authService } from "./auth.service";
-import type { LoginInput } from "./auth.validation";
+import type { ForgotPasswordInput, LoginInput, ResetPasswordInput } from "./auth.validation";
 
 const login = async (
   req: ValidatedRequest<LoginInput>,
@@ -38,6 +38,44 @@ const loginAdmin = async (
   });
 };
 
+const forgotPassword = async (
+  req: ValidatedRequest<ForgotPasswordInput>,
+  res: Response,
+): Promise<void> => {
+  const result = await authService.forgotPassword(req.validatedBody);
+
+  res.status(200).json({
+    success: true,
+    message: "If an account exists for that email, a reset code has been sent",
+    ...(result.code ? { data: { code: result.code } } : {}),
+  });
+};
+
+const forgotAdminPassword = async (
+  req: ValidatedRequest<ForgotPasswordInput>,
+  res: Response,
+): Promise<void> => {
+  const result = await authService.forgotAdminPassword(req.validatedBody);
+
+  res.status(200).json({
+    success: true,
+    message: "If an account exists for that email, a reset code has been sent",
+    ...(result.code ? { data: { code: result.code } } : {}),
+  });
+};
+
+const resetPassword = async (
+  req: ValidatedRequest<ResetPasswordInput>,
+  res: Response,
+): Promise<void> => {
+  await authService.resetPassword(req.validatedBody);
+
+  res.status(200).json({
+    success: true,
+    message: "Password updated",
+  });
+};
+
 const logout = async (req: ValidatedRequest, res: Response): Promise<void> => {
   if (!req.auth) {
     throw AppError.unauthorized();
@@ -62,4 +100,7 @@ export const authController = {
   login,
   loginAdmin,
   logout,
+  forgotPassword,
+  forgotAdminPassword,
+  resetPassword,
 };

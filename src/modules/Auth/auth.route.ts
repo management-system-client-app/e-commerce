@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { authenticate } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
-import { authRateLimiter } from "../../app/middlewares/rateLimiter";
+import { authRateLimiter, passwordResetRateLimiter } from "../../app/middlewares/rateLimiter";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { authController } from "./auth.controller";
-import { loginSchema } from "./auth.validation";
+import { forgotPasswordSchema, loginSchema, resetPasswordSchema } from "./auth.validation";
 
 const router = Router();
 
@@ -20,6 +20,27 @@ router.post(
   authRateLimiter,
   validateRequest({ body: loginSchema }),
   asyncHandler(authController.loginAdmin),
+);
+
+router.post(
+  "/forgot-password",
+  passwordResetRateLimiter,
+  validateRequest({ body: forgotPasswordSchema }),
+  asyncHandler(authController.forgotPassword),
+);
+
+router.post(
+  "/admin/forgot-password",
+  passwordResetRateLimiter,
+  validateRequest({ body: forgotPasswordSchema }),
+  asyncHandler(authController.forgotAdminPassword),
+);
+
+router.post(
+  "/reset-password",
+  passwordResetRateLimiter,
+  validateRequest({ body: resetPasswordSchema }),
+  asyncHandler(authController.resetPassword),
 );
 
 router.post("/logout", authenticate, asyncHandler(authController.logout));
