@@ -57,18 +57,8 @@ const placeOrder = async (
       },
     });
   } catch (error) {
-    const paymentError = error instanceof Error ? error.message : "Payment page could not be created";
-
-    res.status(201).json({
-      success: true,
-      message: "Order placed. Create a checkout page for this order to pay.",
-      data: {
-        ...order,
-        paymentMethod: "STRIPE",
-        checkoutUrl: null,
-        paymentError,
-      },
-    });
+    await orderService.cancelUnpaidOrder(order.id, "Payment page could not be created");
+    throw error;
   }
 };
 
