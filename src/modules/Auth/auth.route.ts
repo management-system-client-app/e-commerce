@@ -4,9 +4,15 @@ import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { authRateLimiter, passwordResetRateLimiter } from "../../app/middlewares/rateLimiter";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { authController } from "./auth.controller";
+import { oauthController } from "./oauth.controller";
 import { forgotPasswordSchema, loginSchema, resetPasswordSchema } from "./auth.validation";
 
 const router = Router();
+
+router.get("/google", authRateLimiter, asyncHandler(oauthController.startGoogle));
+router.get("/google/callback", asyncHandler(oauthController.googleCallback));
+router.get("/facebook", authRateLimiter, asyncHandler(oauthController.startFacebook));
+router.get("/facebook/callback", asyncHandler(oauthController.facebookCallback));
 
 router.post(
   "/login",
