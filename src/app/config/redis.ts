@@ -25,7 +25,33 @@ const target = (): { url: string; token: string } | null => {
   }
 };
 
-export const redisEnabled = target() !== null;
+export const redisEnabled = (): boolean => target() !== null;
+
+export const redisHealth = async (): Promise<{ status: string; detail: string }> => {
+  const redis = target();
+
+  if (!redis) {
+    return {
+      status: "missing",
+      detail: "REDIS_URL is missing. Use the full rediss://default:token@host:6379 value on Production.",
+    };
+  }
+
+  try {
+    const result = await upstashCommand(["PING"]);
+
+    if (result === "PONG") {
+      return { status: "ok", detail: "connected" };
+    }
+
+    return { status: "error", detail: `unexpected ping result: ${String(result)}` };
+  } catch (error) {
+    return {
+      status: "error",
+      detail: error instanceof Error ? error.message : "ping failed",
+    };
+  }
+};
 
 let loggedMissingUrl = false;
 

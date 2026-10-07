@@ -4,6 +4,7 @@ import cors from "cors";
 import express, { type Application, type Request, type Response } from "express";
 import helmet from "helmet";
 import morgan from "morgan";
+import { redisHealth } from "./app/config/redis";
 import { env } from "./app/config/env";
 import { NotFoundError } from "./app/errors/NotFoundError";
 import { globalErrorHandler } from "./app/middlewares/globalErrorHandler";
@@ -72,10 +73,14 @@ app.get("/", (_req: Request, res: Response) => {
 </html>`);
 });
 
-app.get("/health", (_req: Request, res: Response) => {
+app.get("/health", async (_req: Request, res: Response) => {
+  const redis = await redisHealth();
+
   res.status(200).json({
     success: true,
     status: "ok",
+    redis: redis.status,
+    redisDetail: redis.detail,
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
