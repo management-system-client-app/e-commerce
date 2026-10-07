@@ -7,12 +7,12 @@ const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  transports: [
-    // errors go into this file
-    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
-    // all logs (info, warn, error) go into this file
-    new winston.transports.File({ filename: 'logs/combined.log' }),
-  ],
+  transports: process.env.VERCEL
+    ? [new winston.transports.Console()]
+    : [
+        new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+        new winston.transports.File({ filename: 'logs/combined.log' }),
+      ],
 });
 
 const devConsoleFormat = winston.format.printf((info) => {

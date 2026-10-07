@@ -1,4 +1,10 @@
 import { Prisma } from "../../../generated/prisma/client";
+import {
+  cacheGetOrSet,
+  cacheKey,
+  CATALOG_CACHE_TTL_SECONDS,
+  invalidateCache,
+} from "../../app/config/cache";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import type { BrandListQuery, CreateBrandInput } from "./brand.validation";
@@ -51,7 +57,7 @@ const createBrand = async (input: CreateBrandInput) => {
   const slug = await buildSlug(input.name, input.slug);
 
   try {
-    return await prisma.brand.create({
+    const brand = await prisma.brand.create({
       data: {
         name: input.name,
         slug,
@@ -61,6 +67,9 @@ const createBrand = async (input: CreateBrandInput) => {
       },
       select: brandSelect,
     });
+
+    await invalidateCache("catalog", "products");
+    return brand;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw AppError.conflict("A brand with this slug already exists");
@@ -70,7 +79,7 @@ const createBrand = async (input: CreateBrandInput) => {
   }
 };
 
-const getBrands = async (query: BrandListQuery) => {
+const loadBrands = async (query: BrandListQuery) => {
   const where: Prisma.BrandWhereInput = {
     ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
     ...(query.search ? { name: { contains: query.search, mode: "insensitive" } } : {}),
@@ -97,6 +106,19 @@ const getBrands = async (query: BrandListQuery) => {
       totalPages: Math.ceil(total / query.limit),
     },
   };
+};
+
+const getBrands = async (query: BrandListQuery) => {
+  if (query.search) {
+    return loadBrands(query);
+  }
+
+  return cacheGetOrSet(
+    "catalog",
+    `brands:${cacheKey(query)}`,
+    CATALOG_CACHE_TTL_SECONDS,
+    () => loadBrands(query),
+  );
 };
 
 export const brandService = {

@@ -1,4 +1,10 @@
 import { Prisma } from "../../../generated/prisma/client";
+import {
+  cacheGetOrSet,
+  cacheKey,
+  CATALOG_CACHE_TTL_SECONDS,
+  invalidateCache,
+} from "../../app/config/cache";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
@@ -65,7 +71,7 @@ const createCategory = async (input: CreateCategoryInput) => {
   const slug = await buildSlug(input.name, input.slug);
 
   try {
-    return await prisma.category.create({
+    const category = await prisma.category.create({
       data: {
         name: input.name,
         slug,
@@ -77,6 +83,9 @@ const createCategory = async (input: CreateCategoryInput) => {
       },
       select: categorySelect,
     });
+
+    await invalidateCache("catalog", "products");
+    return category;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw AppError.conflict("A category with this slug already exists");
@@ -86,7 +95,7 @@ const createCategory = async (input: CreateCategoryInput) => {
   }
 };
 
-const getCategories = async (query: CategoryListQuery) => {
+const loadCategories = async (query: CategoryListQuery) => {
   const where: Prisma.CategoryWhereInput = {
     ...(query.isActive !== undefined ? { isActive: query.isActive } : {}),
     ...(query.parentId ? { parentId: query.parentId } : {}),
@@ -114,6 +123,19 @@ const getCategories = async (query: CategoryListQuery) => {
       totalPages: Math.ceil(total / query.limit),
     },
   };
+};
+
+const getCategories = async (query: CategoryListQuery) => {
+  if (query.search) {
+    return loadCategories(query);
+  }
+
+  return cacheGetOrSet(
+    "catalog",
+    `categories:${cacheKey(query)}`,
+    CATALOG_CACHE_TTL_SECONDS,
+    () => loadCategories(query),
+  );
 };
 
 export const categoryService = {

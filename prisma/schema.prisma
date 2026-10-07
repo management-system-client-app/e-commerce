@@ -68,6 +68,11 @@ enum CheckoutPaymentMethod {
   STRIPE
 }
 
+enum AuthProvider {
+  GOOGLE
+  FACEBOOK
+}
+
 enum PaymentStatus {
   PENDING
   PROCESSING
@@ -149,9 +154,23 @@ model User {
   refreshTokens      RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   reviews            Review[]
+  oauthAccounts      OAuthAccount[]
 
   @@index([phone])
   @@index([isActive])
+}
+
+model OAuthAccount {
+  id             String       @id @default(uuid())
+  provider       AuthProvider
+  providerUserId String
+  userId         String
+  createdAt      DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
 }
 
 model Admin {

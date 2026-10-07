@@ -4,6 +4,7 @@ import { env } from "./app/config/env";
 import { prisma } from "./app/config/prisma";
 import logger from "./config/logger";
 import { bootstrapDatabase } from "./app/config/bootstrapDatabase";
+import { disconnectRedis, connectRedis } from "./app/config/redis";
 import { authService } from "./modules/Auth/auth.service";
 
 let server: Server | undefined;
@@ -18,13 +19,19 @@ const shutdown = (reason: string, exitCode: number): void => {
   logger.info(`${reason} received. Shutting down.`);
 
   const closeDatabase = (): void => {
-    prisma
-      .$disconnect()
+    disconnectRedis()
       .catch((error: unknown) => {
-        logger.error("Failed to disconnect Prisma", { error });
+        logger.error("Failed to disconnect Redis", { error });
       })
       .finally(() => {
-        process.exit(exitCode);
+        prisma
+          .$disconnect()
+          .catch((error: unknown) => {
+            logger.error("Failed to disconnect Prisma", { error });
+          })
+          .finally(() => {
+            process.exit(exitCode);
+          });
       });
   };
 
@@ -99,7 +106,17 @@ const listen = (attempt: number): void => {
   });
 };
 
-void bootstrapDatabase()
+const prepareDatabase = async (): Promise<void> => {
+  if (env.NODE_ENV === "production") {
+    logger.info("Skipping startup migrations. Run pnpm db:deploy before production start.");
+    return;
+  }
+
+  await bootstrapDatabase();
+};
+
+void prepareDatabase()
+  .then(() => connectRedis())
   .then(() => authService.ensureDefaultAdmin())
   .then(() => {
     listen(1);

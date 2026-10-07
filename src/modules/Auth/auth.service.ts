@@ -353,25 +353,34 @@ const ensureDefaultAdmin = async (): Promise<void> => {
     return;
   }
 
-  const admin = await prisma.admin.create({
-    data: {
-      firstName: env.ADMIN_FIRST_NAME,
-      lastName: env.ADMIN_LAST_NAME,
-      email: env.ADMIN_EMAIL,
-      passwordHash: await hashPassword(env.ADMIN_PASSWORD),
-      role: "SUPER_ADMIN",
-    },
-    select: {
-      firstName: true,
-      lastName: true,
-      email: true,
-      role: true,
-    },
-  });
+  try {
+    const admin = await prisma.admin.create({
+      data: {
+        firstName: env.ADMIN_FIRST_NAME,
+        lastName: env.ADMIN_LAST_NAME,
+        email: env.ADMIN_EMAIL,
+        passwordHash: await hashPassword(env.ADMIN_PASSWORD),
+        role: "SUPER_ADMIN",
+      },
+      select: {
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+      },
+    });
 
-  console.log("Default admin created");
-  printAdminDetails(admin);
-  console.log(`  password: ${env.ADMIN_PASSWORD}`);
+    console.log("Default admin created");
+    printAdminDetails(admin);
+    console.log(`  password: ${env.ADMIN_PASSWORD}`);
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      console.log("Admin already exists");
+      return;
+    }
+
+    throw error;
+  }
 };
 
 export const authService = {
