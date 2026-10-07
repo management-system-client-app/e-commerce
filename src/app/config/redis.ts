@@ -26,23 +26,42 @@ const createClient = (): Redis | null => {
 
 export const redis = createClient();
 
-export const connectRedis = async (): Promise<void> => {
-  if (!redis) {
-    logger.info("REDIS_URL is not set. Catalog and product reads will use Postgres.");
-    return;
-  }
+let connecting: Promise<void> | undefined;
+let loggedMissingUrl = false;
 
-  try {
-    if (redis.status === "wait") {
-      await redis.connect();
+export const connectRedis = (): Promise<void> => {
+  if (!redis) {
+    if (!loggedMissingUrl) {
+      loggedMissingUrl = true;
+      logger.info("REDIS_URL is not set. Catalog and product reads will use Postgres.");
     }
 
-    logger.info("Redis connected");
-  } catch (error) {
-    logger.warn("Redis is unavailable. Catalog and product reads will use Postgres.", {
-      message: error instanceof Error ? error.message : "unknown",
-    });
+    return Promise.resolve();
   }
+
+  if (redis.status === "ready") {
+    return Promise.resolve();
+  }
+
+  if (connecting) {
+    return connecting;
+  }
+
+  connecting = redis
+    .connect()
+    .then(() => {
+      logger.info("Redis connected");
+    })
+    .catch((error: unknown) => {
+      logger.warn("Redis is unavailable. Catalog and product reads will use Postgres.", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+    })
+    .finally(() => {
+      connecting = undefined;
+    });
+
+  return connecting;
 };
 
 export const disconnectRedis = async (): Promise<void> => {
