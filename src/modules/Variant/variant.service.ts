@@ -1,4 +1,5 @@
 import { Prisma } from "../../../generated/prisma/client";
+import { invalidateCache } from "../../app/config/cache";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
@@ -124,7 +125,7 @@ const createVariant = async (input: CreateVariantInput) => {
   }
 
   try {
-    return await prisma.productVariant.create({
+    const variant = await prisma.productVariant.create({
       data: {
         productId: input.productId,
         sizeId: input.sizeId,
@@ -141,6 +142,9 @@ const createVariant = async (input: CreateVariantInput) => {
       },
       include: variantInclude,
     });
+
+    await invalidateCache("products");
+    return variant;
   } catch (error) {
     return rethrowWriteError(error);
   }
@@ -236,11 +240,14 @@ const updateVariant = async (id: string, input: UpdateVariantInput) => {
   }
 
   try {
-    return await prisma.productVariant.update({
+    const variant = await prisma.productVariant.update({
       where: { id },
       data: input,
       include: variantInclude,
     });
+
+    await invalidateCache("products");
+    return variant;
   } catch (error) {
     return rethrowWriteError(error);
   }
@@ -274,6 +281,7 @@ const deleteVariant = async (id: string) => {
   }
 
   await prisma.productVariant.delete({ where: { id } });
+  await invalidateCache("products");
 };
 
 export const variantService = {

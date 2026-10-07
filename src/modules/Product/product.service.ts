@@ -1,4 +1,10 @@
 import { Prisma } from "../../../generated/prisma/client";
+import {
+  cacheGetOrSet,
+  cacheKey,
+  invalidateCache,
+  PRODUCT_CACHE_TTL_SECONDS,
+} from "../../app/config/cache";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
@@ -191,7 +197,7 @@ const createProduct = async (
   const sizeCatalog = input.sizes?.length ? await loadSizes(input.sizes) : undefined;
 
   try {
-    return await prisma.product.create({
+    const product = await prisma.product.create({
       data: {
         name: input.name,
         slug,
@@ -243,12 +249,15 @@ const createProduct = async (
       },
       include: productDetailInclude,
     });
+
+    await invalidateCache("products");
+    return product;
   } catch (error) {
     return rethrowWriteError(error, "A product with this slug already exists");
   }
 };
 
-const getAllProducts = async (query: ProductListQuery) => {
+const loadProducts = async (query: ProductListQuery) => {
   const where: Prisma.ProductWhereInput = {
     ...(query.status ? { status: query.status } : {}),
     ...(query.gender ? { gender: query.gender } : {}),
@@ -288,17 +297,32 @@ const getAllProducts = async (query: ProductListQuery) => {
   };
 };
 
-const getSingleProduct = async (id: string) => {
-  const product = await prisma.product.findUnique({
-    where: { id },
-    include: productDetailInclude,
-  });
-
-  if (!product) {
-    throw new NotFoundError("Product not found");
+const getAllProducts = async (query: ProductListQuery) => {
+  if (query.search) {
+    return loadProducts(query);
   }
 
-  return product;
+  return cacheGetOrSet(
+    "products",
+    `list:${cacheKey(query)}`,
+    PRODUCT_CACHE_TTL_SECONDS,
+    () => loadProducts(query),
+  );
+};
+
+const getSingleProduct = async (id: string) => {
+  return cacheGetOrSet("products", `id:${id}`, PRODUCT_CACHE_TTL_SECONDS, async () => {
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: productDetailInclude,
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    return product;
+  });
 };
 
 const updateProduct = async (id: string, input: UpdateProductInput) => {
@@ -325,11 +349,14 @@ const updateProduct = async (id: string, input: UpdateProductInput) => {
   }
 
   try {
-    return await prisma.product.update({
+    const product = await prisma.product.update({
       where: { id },
       data,
       include: productDetailInclude,
     });
+
+    await invalidateCache("products");
+    return product;
   } catch (error) {
     return rethrowWriteError(error, "A product with this slug already exists");
   }
@@ -375,6 +402,8 @@ const deleteProduct = async (id: string) => {
 
     await tx.product.delete({ where: { id } });
   });
+
+  await invalidateCache("products");
 };
 
 export const productService = {

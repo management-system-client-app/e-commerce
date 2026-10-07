@@ -166,7 +166,15 @@ const checkoutSessionIdOf = (metadata: Prisma.JsonValue): string | undefined => 
   return typeof value === "string" && value.length > 0 ? value : undefined;
 };
 
-const appBaseUrl = (): string => `http://localhost:${env.PORT}`;
+const appBaseUrl = (): string => {
+  const configured = process.env.APP_URL?.trim().replace(/\/$/, "");
+  if (configured) return configured;
+
+  const vercelHost = process.env.VERCEL_URL?.trim().replace(/\/$/, "");
+  if (vercelHost) return `https://${vercelHost}`;
+
+  return `http://localhost:${env.PORT}`;
+};
 
 const createCheckoutSession = async (userId: string, orderId: string) => {
   const stripe = getStripe();

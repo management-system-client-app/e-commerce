@@ -1,4 +1,9 @@
 import { Prisma } from "../../../generated/prisma/client";
+import {
+  cacheGetOrSet,
+  CATALOG_CACHE_TTL_SECONDS,
+  invalidateCache,
+} from "../../app/config/cache";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import type {
@@ -63,13 +68,16 @@ const createSize = async (input: CreateSizeInput) => {
   );
 
   try {
-    return await prisma.size.create({
+    const size = await prisma.size.create({
       data: {
         name: input.name,
         slug,
         sortOrder: input.sortOrder ?? 0,
       },
     });
+
+    await invalidateCache("catalog", "products");
+    return size;
   } catch (error) {
     throw rethrowDuplicate(error, "A size with this slug already exists");
   }
@@ -100,13 +108,16 @@ const createFabric = async (input: CreateFabricInput) => {
   );
 
   try {
-    return await prisma.fabric.create({
+    const fabric = await prisma.fabric.create({
       data: {
         name: input.name,
         slug,
         composition: input.composition,
       },
     });
+
+    await invalidateCache("catalog", "products");
+    return fabric;
   } catch (error) {
     throw rethrowDuplicate(error, "A fabric with this slug already exists");
   }
@@ -132,6 +143,10 @@ const getFabrics = async (query: CatalogListQuery) => {
 };
 
 const getCatalog = async () => {
+  return cacheGetOrSet("catalog", "storefront", CATALOG_CACHE_TTL_SECONDS, loadCatalog);
+};
+
+const loadCatalog = async () => {
   const [brands, categories, sizes, fabrics] = await Promise.all([
     prisma.brand.findMany({
       where: { isActive: true },

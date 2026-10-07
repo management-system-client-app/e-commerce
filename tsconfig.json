@@ -18,6 +18,6 @@
     "strictNullChecks": true,                    // catches null/undefined bugs early
     "noImplicitReturns": true                    // every code path must return a value
   },
-  "include": ["src/**/*.ts", "generated/**/*.ts"],
+  "include": ["src/**/*.ts", "api/**/*.ts", "generated/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

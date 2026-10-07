@@ -3,11 +3,19 @@ import { z } from "zod";
 
 dotenv.config({ quiet: true });
 
+const optionalString = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().min(1).optional(),
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(5000),
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DIRECT_URL: optionalString,
+  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
+  REDIS_URL: optionalString,
   ADMIN_EMAIL: z.email().default("anondo554@gmail.com"),
   ADMIN_PASSWORD: z.string().min(8, "ADMIN_PASSWORD must be at least 8 characters").default("12345678"),
   ADMIN_FIRST_NAME: z.string().trim().min(1).default("Anondo"),
