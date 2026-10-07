@@ -1,77 +1,62 @@
-import Redis from "ioredis";
 import logger from "../../config/logger";
 import { env } from "./env";
 
-const createClient = (): Redis | null => {
+type UpstashResult = string | number | null;
+
+const target = (): { url: string; token: string } | null => {
   if (!env.REDIS_URL) {
     return null;
   }
 
-  const client = new Redis(env.REDIS_URL, {
-    lazyConnect: true,
-    maxRetriesPerRequest: 1,
-    enableOfflineQueue: false,
-    connectTimeout: 2_000,
-    retryStrategy(times) {
-      return Math.min(times * 200, 5_000);
-    },
-  });
+  try {
+    const parsed = new URL(env.REDIS_URL);
+    const token = decodeURIComponent(parsed.password);
 
-  client.on("error", (error: Error) => {
-    logger.warn("Redis error", { message: error.message });
-  });
+    if (!parsed.hostname || !token) {
+      return null;
+    }
 
-  return client;
+    return {
+      url: `https://${parsed.hostname}`,
+      token,
+    };
+  } catch {
+    return null;
+  }
 };
 
-export const redis = createClient();
+export const redisEnabled = target() !== null;
 
-let connecting: Promise<void> | undefined;
 let loggedMissingUrl = false;
 
-export const connectRedis = (): Promise<void> => {
+export const upstashCommand = async (
+  command: Array<string | number>,
+): Promise<UpstashResult> => {
+  const redis = target();
+
   if (!redis) {
     if (!loggedMissingUrl) {
       loggedMissingUrl = true;
       logger.info("REDIS_URL is not set. Catalog and product reads will use Postgres.");
     }
 
-    return Promise.resolve();
+    throw new Error("REDIS_URL is not set");
   }
 
-  if (redis.status === "ready") {
-    return Promise.resolve();
+  const response = await fetch(redis.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${redis.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(command),
+  });
+
+  const body = (await response.json()) as { result?: UpstashResult; error?: string };
+
+  if (!response.ok || body.error) {
+    throw new Error(body.error || `Upstash request failed (${response.status})`);
   }
 
-  if (connecting) {
-    return connecting;
-  }
-
-  connecting = redis
-    .connect()
-    .then(() => {
-      logger.info("Redis connected");
-    })
-    .catch((error: unknown) => {
-      logger.warn("Redis is unavailable. Catalog and product reads will use Postgres.", {
-        message: error instanceof Error ? error.message : "unknown",
-      });
-    })
-    .finally(() => {
-      connecting = undefined;
-    });
-
-  return connecting;
-};
-
-export const disconnectRedis = async (): Promise<void> => {
-  if (!redis) {
-    return;
-  }
-
-  try {
-    await redis.quit();
-  } catch {
-    redis.disconnect();
-  }
+  return body.result ?? null;
 };

@@ -1,5 +1,5 @@
 import logger from "../../config/logger";
-import { redis } from "./redis";
+import { redisEnabled, upstashCommand } from "./redis";
 
 export const CATALOG_CACHE_TTL_SECONDS = 120;
 export const PRODUCT_CACHE_TTL_SECONDS = 45;
@@ -13,8 +13,6 @@ const warn = (action: string, error: unknown): void => {
     message: error instanceof Error ? error.message : "unknown",
   });
 };
-
-const ready = (): boolean => redis !== null && redis.status === "ready";
 
 export const cacheKey = (value: unknown): string => {
   if (value === null || typeof value !== "object") {
@@ -40,14 +38,15 @@ export const cacheGetOrSet = async <T>(
   ttlSeconds: number,
   loader: () => Promise<T>,
 ): Promise<T> => {
-  if (!ready() || !redis) {
+  if (!redisEnabled) {
     return loader();
   }
 
   let version = "0";
 
   try {
-    version = (await redis.get(versionKey(scope))) ?? "0";
+    const stored = await upstashCommand(["GET", versionKey(scope)]);
+    version = stored == null ? "0" : String(stored);
   } catch (error) {
     warn("read", error);
     return loader();
@@ -56,9 +55,9 @@ export const cacheGetOrSet = async <T>(
   const fullKey = `shop:${scope}:v${version}:${key}`;
 
   try {
-    const hit = await redis.get(fullKey);
+    const hit = await upstashCommand(["GET", fullKey]);
 
-    if (hit) {
+    if (typeof hit === "string") {
       return JSON.parse(hit) as T;
     }
   } catch (error) {
@@ -69,7 +68,7 @@ export const cacheGetOrSet = async <T>(
   const value = await loader();
 
   try {
-    await redis.set(fullKey, JSON.stringify(value), "EX", ttlSeconds);
+    await upstashCommand(["SET", fullKey, JSON.stringify(value), "EX", ttlSeconds]);
   } catch (error) {
     warn("write", error);
   }
@@ -78,14 +77,12 @@ export const cacheGetOrSet = async <T>(
 };
 
 export const invalidateCache = async (...scopes: CacheScope[]): Promise<void> => {
-  const client = redis;
-
-  if (!client || client.status !== "ready") {
+  if (!redisEnabled) {
     return;
   }
 
   try {
-    await Promise.all(scopes.map((scope) => client.incr(versionKey(scope))));
+    await Promise.all(scopes.map((scope) => upstashCommand(["INCR", versionKey(scope)])));
   } catch (error) {
     warn("invalidate", error);
   }
