@@ -38,7 +38,7 @@ export const cacheGetOrSet = async <T>(
   ttlSeconds: number,
   loader: () => Promise<T>,
 ): Promise<T> => {
-  if (!redisEnabled) {
+  if (!redisEnabled()) {
     return loader();
   }
 
@@ -77,7 +77,7 @@ export const cacheGetOrSet = async <T>(
 };
 
 export const invalidateCache = async (...scopes: CacheScope[]): Promise<void> => {
-  if (!redisEnabled) {
+  if (!redisEnabled()) {
     return;
   }
 
