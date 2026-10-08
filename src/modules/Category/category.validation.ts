@@ -37,5 +37,28 @@ export const categoryListQuerySchema = z
   })
   .strict();
 
+export const updateCategorySchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    slug: slugSchema.optional(),
+    description: optionalText(1000),
+    imageUrl: z.url().nullable().optional(),
+    parentId: z.uuid().nullable().optional(),
+    isActive: z.boolean().optional(),
+    sortOrder: z.number().int().min(0).max(10_000).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
+
+export const categoryIdParamSchema = z
+  .object({
+    id: z.uuid(),
+  })
+  .strict();
+
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
+export type UpdateCategoryInput = z.infer<typeof updateCategorySchema>;
+export type CategoryIdParam = z.infer<typeof categoryIdParamSchema>;
 export type CategoryListQuery = z.infer<typeof categoryListQuerySchema>;

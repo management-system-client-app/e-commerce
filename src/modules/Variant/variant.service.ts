@@ -272,16 +272,23 @@ const deleteVariant = async (id: string) => {
     throw new NotFoundError("Variant not found");
   }
 
-  const { cartItems, orderItems, exchanges } = existing._count;
+  const { orderItems, exchanges } = existing._count;
 
-  if (cartItems > 0 || orderItems > 0 || exchanges > 0) {
-    throw AppError.conflict(
-      "This variant is used by a cart, order, or exchange. Deactivate it instead of deleting it",
-    );
+  if (orderItems > 0 || exchanges > 0) {
+    await prisma.$transaction(async (tx) => {
+      await tx.cartItem.deleteMany({ where: { variantId: id } });
+      await tx.productVariant.update({ where: { id }, data: { isActive: false } });
+    });
+    await invalidateCache("products");
+    return { deactivated: true as const };
   }
 
-  await prisma.productVariant.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.cartItem.deleteMany({ where: { variantId: id } });
+    await tx.productVariant.delete({ where: { id } });
+  });
   await invalidateCache("products");
+  return { deactivated: false as const };
 };
 
 export const variantService = {

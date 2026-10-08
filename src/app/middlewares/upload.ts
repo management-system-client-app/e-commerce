@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
+import { uploadImageBuffer } from "../config/cloudinary";
 import { AppError } from "../errors/AppError";
 
 const IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -42,6 +43,27 @@ export const parseMultipartData = (req: Request, _res: Response, next: NextFunct
     req.body = JSON.parse(data) as unknown;
     next();
   } catch {
-    next(AppError.badRequest("Product data must be valid JSON"));
+    next(AppError.badRequest("Form data must be valid JSON"));
   }
 };
+
+export const singleImageUpload = upload.single("image");
+
+/** When a multipart request includes `image`, upload it and set `imageUrl` on the JSON body. */
+export const applyUploadedImage =
+  (folder: string) =>
+  async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
+    if (!req.file) {
+      next();
+      return;
+    }
+
+    try {
+      const uploaded = await uploadImageBuffer(req.file.buffer, folder);
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      req.body = { ...body, imageUrl: uploaded.url };
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };

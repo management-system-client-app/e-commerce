@@ -20,6 +20,13 @@ export const forgotPasswordSchema = z
   })
   .strict();
 
+export const verifyResetCodeSchema = z
+  .object({
+    email: z.email().transform((value) => value.toLowerCase()),
+    code: z.string().trim().regex(/^\d{6}$/, "Code must be 6 digits"),
+  })
+  .strict();
+
 export const resetPasswordSchema = z
   .object({
     email: z.email().transform((value) => value.toLowerCase()),
@@ -34,4 +41,5 @@ export const resetPasswordSchema = z
   });
 
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type VerifyResetCodeInput = z.infer<typeof verifyResetCodeSchema>;
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

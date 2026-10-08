@@ -68,11 +68,14 @@ const deleteVariant = async (
   res: Response,
 ): Promise<void> => {
   const { id } = req.validatedParams;
-  await variantService.deleteVariant(id);
+  const result = await variantService.deleteVariant(id);
 
   res.status(200).json({
     success: true,
-    message: "Variant deleted",
+    message: result.deactivated
+      ? "Variant deactivated. It stays on past orders and is hidden from the shop."
+      : "Variant deleted",
+    data: result,
   });
 };
 

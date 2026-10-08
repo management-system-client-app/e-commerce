@@ -3,11 +3,17 @@ import { Prisma } from "../../../generated/prisma/client";
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
+import { resolveShipping } from "../Delivery/delivery.service";
+import { chooseDiscount } from "../Promotion/promotion.service";
+import { settingsService } from "../Settings/settings.service";
+import { sendOrderConfirmationEmail, sendOrderShippedEmail } from "../../utils/emailSender";
+import { sendOrderMail } from "../../utils/orderMail";
 import type { AuthContext } from "../../app/middlewares/auth";
 import type {
   OrderListQuery,
   OrderStatusValue,
   PlaceOrderInput,
+  TrackOrderQuery,
   UpdateOrderStatusInput,
 } from "./order.validation";
 
@@ -50,6 +56,8 @@ const orderDetailInclude = {
       provider: true,
       status: true,
       method: true,
+      transactionId: true,
+      failureReason: true,
       amount: true,
       currency: true,
       paidAt: true,
@@ -81,10 +89,20 @@ const createOrderNumber = (): string => {
   return `ORD-${time}-${suffix}`;
 };
 
-const placeOrder = async (userId: string, input: PlaceOrderInput) => {
-  return prisma.$transaction(async (tx) => {
+type OrderBuyer = { kind: "user"; userId: string } | { kind: "guest"; sessionId: string };
+
+const placeOrder = async (buyer: OrderBuyer, input: PlaceOrderInput) => {
+  if (buyer.kind === "guest" && !input.email) {
+    throw AppError.badRequest("Email is required to place a guest order");
+  }
+
+  if (buyer.kind === "guest" && input.couponCode) {
+    throw AppError.badRequest("Sign in to use a coupon");
+  }
+
+  const placed = await prisma.$transaction(async (tx) => {
     const cart = await tx.cart.findUnique({
-      where: { userId },
+      where: buyer.kind === "user" ? { userId: buyer.userId } : { sessionId: buyer.sessionId },
       include: { items: true },
     });
 
@@ -93,10 +111,24 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
     }
 
     if (!cart.paymentMethod) {
-      throw AppError.badRequest("Choose COD or STRIPE before placing the order");
+      throw AppError.badRequest("Choose COD, STRIPE, BKASH, or NAGAD before placing the order");
     }
 
     const paymentMethod = cart.paymentMethod;
+    const manualProvider = paymentMethod === "BKASH" || paymentMethod === "NAGAD" ? paymentMethod : null;
+
+    if (manualProvider) {
+      const settings = await settingsService.getSettings();
+      const walletNumber = manualProvider === "BKASH" ? settings.bkashNumber : settings.nagadNumber;
+
+      if (!walletNumber) {
+        throw AppError.badRequest(
+          manualProvider === "BKASH"
+            ? "bKash number is not configured"
+            : "Nagad number is not configured",
+        );
+      }
+    }
 
     const variants = await tx.productVariant.findMany({
       where: { id: { in: cart.items.map((item) => item.variantId) } },
@@ -106,8 +138,11 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
         fabric: { select: { name: true } },
         product: {
           select: {
+            id: true,
             name: true,
             status: true,
+            categoryId: true,
+            brandId: true,
             basePrice: true,
             images: {
               select: { url: true, isPrimary: true, colorId: true, sortOrder: true },
@@ -151,6 +186,9 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
 
       return {
         variantId: variant.id,
+        productId: variant.product.id,
+        categoryId: variant.product.categoryId,
+        brandId: variant.product.brandId,
         productName: variant.product.name,
         sku: variant.sku,
         size: variant.size.name,
@@ -180,17 +218,46 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
     }
 
     const subtotal = money(lines.reduce((total, line) => total + line.lineTotal, 0));
+    const discount = await chooseDiscount(
+      tx,
+      buyer.kind === "user" ? buyer.userId : "",
+      lines.map((line) => ({
+        productId: line.productId,
+        categoryId: line.categoryId,
+        brandId: line.brandId,
+        lineTotal: line.lineTotal,
+      })),
+      input.couponCode,
+    );
+    const discountAmount = discount.discount;
+    const zones = await tx.deliveryZone.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        fee: true,
+        freeShippingOver: true,
+      },
+    });
+    const shipping = resolveShipping(zones, input.shippingCity, subtotal);
+    const shippingAmount = money(shipping.fee);
+    const total = money(subtotal - discountAmount + shippingAmount);
 
     const order = await tx.order.create({
       data: {
         orderNumber: createOrderNumber(),
-        userId,
+        userId: buyer.kind === "user" ? buyer.userId : null,
+        guestEmail: buyer.kind === "guest" ? input.email : null,
         status: paymentMethod === "COD" ? "CONFIRMED" : "PENDING",
         subtotal,
-        discountAmount: 0,
-        shippingAmount: 0,
+        discountAmount,
+        shippingAmount,
         taxAmount: 0,
-        total: subtotal,
+        total,
+        ...(discount.couponId ? { couponId: discount.couponId } : {}),
+        ...(discount.promotionId ? { promotionId: discount.promotionId } : {}),
         currency: "USD",
         shippingFullName: input.shippingFullName,
         shippingPhone: input.shippingPhone,
@@ -221,16 +288,60 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
                 create: {
                   provider: "COD" as const,
                   status: "PENDING" as const,
-                  amount: subtotal,
+                  amount: total,
                   currency: "USD",
                   method: "cash_on_delivery",
                 },
               },
             }
-          : {}),
+          : manualProvider
+            ? {
+                payments: {
+                  create: {
+                    provider: manualProvider,
+                    status: "PENDING" as const,
+                    amount: total,
+                    currency: "USD",
+                    method: manualProvider === "BKASH" ? "bkash" : "nagad",
+                  },
+                },
+              }
+            : {}),
       },
       include: orderDetailInclude,
     });
+
+    if (discount.couponId && buyer.kind === "user") {
+      const uses = await tx.couponRedemption.count({
+        where: { couponId: discount.couponId, userId: buyer.userId },
+      });
+
+      if (discount.usageLimitPerUser != null && uses >= discount.usageLimitPerUser) {
+        throw AppError.badRequest("You have already used this coupon");
+      }
+
+      const redeemed = await tx.coupon.updateMany({
+        where: {
+          id: discount.couponId,
+          isActive: true,
+          ...(discount.usageLimit != null ? { usedCount: { lt: discount.usageLimit } } : {}),
+        },
+        data: { usedCount: { increment: 1 } },
+      });
+
+      if (redeemed.count !== 1) {
+        throw AppError.badRequest("This coupon has reached its usage limit");
+      }
+
+      await tx.couponRedemption.create({
+        data: {
+          couponId: discount.couponId,
+          userId: buyer.userId,
+          orderId: order.id,
+          discount: discountAmount,
+        },
+      });
+    }
 
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
     await tx.cart.update({
@@ -240,6 +351,44 @@ const placeOrder = async (userId: string, input: PlaceOrderInput) => {
 
     return { order, paymentMethod };
   });
+
+  const customerName = placed.order.user
+    ? `${placed.order.user.firstName} ${placed.order.user.lastName}`.trim()
+    : placed.order.shippingFullName;
+  const customerEmail = placed.order.user?.email ?? placed.order.guestEmail;
+  const total = Number(placed.order.total);
+
+  let payTo: string | null = null;
+  if (placed.paymentMethod === "BKASH" || placed.paymentMethod === "NAGAD") {
+    const settings = await settingsService.getSettings();
+    payTo = placed.paymentMethod === "BKASH" ? settings.bkashNumber : settings.nagadNumber;
+  }
+
+  const paymentNote = payTo
+    ? `Send the total to ${placed.paymentMethod === "BKASH" ? "bKash" : "Nagad"} ${payTo}, then submit the transaction id in your account.`
+    : placed.paymentMethod === "COD"
+      ? "Pay cash when the order arrives."
+      : "Open the store receipt and pay by card to confirm the order.";
+
+  const emailed = customerEmail
+    ? await sendOrderMail(() =>
+        sendOrderConfirmationEmail({
+          to: customerEmail,
+          customerName,
+          orderNumber: placed.order.orderNumber,
+          total,
+          currency: placed.order.currency,
+          paymentNote,
+          items: placed.order.items.map((item) => ({
+            name: item.productName,
+            quantity: item.quantity,
+            lineTotal: Number(item.lineTotal),
+          })),
+        }),
+      )
+    : false;
+
+  return { ...placed, payTo, emailed };
 };
 
 const getOrders = async (auth: AuthContext, query: OrderListQuery) => {
@@ -271,6 +420,62 @@ const getOrders = async (auth: AuthContext, query: OrderListQuery) => {
   };
 };
 
+const phoneKey = (value: string): string => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+};
+
+const trackOrder = async (query: TrackOrderQuery) => {
+  const order = await prisma.order.findFirst({
+    where: {
+      orderNumber: { equals: query.orderNumber, mode: "insensitive" },
+    },
+    select: {
+      orderNumber: true,
+      status: true,
+      currency: true,
+      total: true,
+      placedAt: true,
+      paidAt: true,
+      shippedAt: true,
+      deliveredAt: true,
+      cancelledAt: true,
+      shippingPhone: true,
+      items: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          productName: true,
+          sku: true,
+          size: true,
+          color: true,
+          fabric: true,
+          imageUrl: true,
+          quantity: true,
+          unitPrice: true,
+          lineTotal: true,
+        },
+      },
+    },
+  });
+
+  if (!order || phoneKey(order.shippingPhone) !== phoneKey(query.phone)) {
+    throw new NotFoundError("Order not found");
+  }
+
+  return {
+    orderNumber: order.orderNumber,
+    status: order.status,
+    currency: order.currency,
+    total: order.total,
+    placedAt: order.placedAt,
+    paidAt: order.paidAt,
+    shippedAt: order.shippedAt,
+    deliveredAt: order.deliveredAt,
+    cancelledAt: order.cancelledAt,
+    items: order.items,
+  };
+};
+
 const getOrder = async (auth: AuthContext, id: string) => {
   const order = await prisma.order.findUnique({
     where: { id },
@@ -285,7 +490,7 @@ const getOrder = async (auth: AuthContext, id: string) => {
 };
 
 const updateOrderStatus = async (id: string, input: UpdateOrderStatusInput) => {
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id },
       include: {
@@ -328,6 +533,22 @@ const updateOrderStatus = async (id: string, input: UpdateOrderStatusInput) => {
       include: orderDetailInclude,
     });
   });
+
+  const shippedEmail = updated.user?.email ?? updated.guestEmail;
+
+  if (updated.status === "SHIPPED" && shippedEmail) {
+    await sendOrderMail(() =>
+      sendOrderShippedEmail({
+        to: shippedEmail,
+        customerName: updated.user
+          ? `${updated.user.firstName} ${updated.user.lastName}`.trim()
+          : updated.shippingFullName,
+        orderNumber: updated.orderNumber,
+      }),
+    );
+  }
+
+  return updated;
 };
 
 const cancelUnpaidOrder = async (orderId: string, reason: string): Promise<void> => {
@@ -379,5 +600,6 @@ export const orderService = {
   cancelUnpaidOrder,
   getOrders,
   getOrder,
+  trackOrder,
   updateOrderStatus,
 };

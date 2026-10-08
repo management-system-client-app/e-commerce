@@ -2,6 +2,7 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express, { type Application, type Request, type Response } from "express";
+import path from "node:path";
 import helmet from "helmet";
 import morgan from "morgan";
 import { redisHealth } from "./app/config/redis";
@@ -85,6 +86,11 @@ app.get("/health", async (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+app.use("/uploads", (_req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(path.join(process.cwd(), "uploads")));
 
 app.use("/api/v1", routes);
 

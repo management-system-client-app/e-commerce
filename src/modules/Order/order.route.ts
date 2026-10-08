@@ -1,12 +1,14 @@
 import { Router } from "express";
-import { authenticate, authorize } from "../../app/middlewares/auth";
+import { authenticate, authenticateOptional, authorize } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
+import { orderTrackRateLimiter } from "../../app/middlewares/rateLimiter";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { orderController } from "./order.controller";
 import {
   orderIdParamSchema,
   orderListQuerySchema,
   placeOrderSchema,
+  trackOrderQuerySchema,
   updateOrderStatusSchema,
 } from "./order.validation";
 
@@ -14,8 +16,7 @@ const router = Router();
 
 router.post(
   "/",
-  authenticate,
-  authorize("USER"),
+  authenticateOptional,
   validateRequest({ body: placeOrderSchema }),
   asyncHandler(orderController.placeOrder),
 );
@@ -26,6 +27,13 @@ router.get(
   authorize("USER", "ADMIN"),
   validateRequest({ query: orderListQuerySchema }),
   asyncHandler(orderController.getOrders),
+);
+
+router.get(
+  "/track",
+  orderTrackRateLimiter,
+  validateRequest({ query: trackOrderQuerySchema }),
+  asyncHandler(orderController.trackOrder),
 );
 
 router.patch(

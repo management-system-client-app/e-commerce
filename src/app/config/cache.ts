@@ -4,7 +4,7 @@ import { redisEnabled, upstashCommand } from "./redis";
 export const CATALOG_CACHE_TTL_SECONDS = 120;
 export const PRODUCT_CACHE_TTL_SECONDS = 45;
 
-type CacheScope = "catalog" | "products";
+type CacheScope = "catalog" | "products" | "home" | "content";
 
 const versionKey = (scope: CacheScope): string => `shop:${scope}:version`;
 

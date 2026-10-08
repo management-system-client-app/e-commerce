@@ -134,6 +134,13 @@ export const productIdParamSchema = z
   })
   .strict();
 
+const productSorts = ["latest", "price_asc", "price_desc", "name_asc"] as const;
+
+const optionalQueryPrice = z.preprocess(
+  (value) => (value === "" || value === undefined || value === null ? undefined : value),
+  z.coerce.number().nonnegative().max(99_999_999.99).optional(),
+);
+
 export const productListQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().default(1),
@@ -147,8 +154,44 @@ export const productListQuerySchema = z
     gender: z.enum(genders).optional(),
     categoryId: z.uuid().optional(),
     brandId: z.uuid().optional(),
+    sizeId: z.uuid().optional(),
+    colorId: z.uuid().optional(),
+    fabricId: z.uuid().optional(),
+    inStock: z
+      .enum(["true", "false"])
+      .optional()
+      .transform((value) => (value === undefined ? undefined : value === "true")),
+    sort: z.enum(productSorts).default("latest"),
+    minPrice: optionalQueryPrice,
+    maxPrice: optionalQueryPrice,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    for (const [field, price] of [
+      ["minPrice", value.minPrice],
+      ["maxPrice", value.maxPrice],
+    ] as const) {
+      if (price == null) {
+        continue;
+      }
+
+      if (Math.abs(price * 100 - Math.round(price * 100)) >= 1e-6) {
+        ctx.addIssue({
+          code: "custom",
+          path: [field],
+          message: "Price can have at most 2 decimal places",
+        });
+      }
+    }
+
+    if (value.minPrice != null && value.maxPrice != null && value.minPrice > value.maxPrice) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["minPrice"],
+        message: "minPrice cannot be greater than maxPrice",
+      });
+    }
+  });
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;

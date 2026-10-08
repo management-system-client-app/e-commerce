@@ -8,7 +8,7 @@ import {
 import { prisma } from "../../app/config/prisma";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
-import type { CategoryListQuery, CreateCategoryInput } from "./category.validation";
+import type { CategoryListQuery, CreateCategoryInput, UpdateCategoryInput } from "./category.validation";
 
 const categorySelect = {
   id: true,
@@ -84,7 +84,7 @@ const createCategory = async (input: CreateCategoryInput) => {
       select: categorySelect,
     });
 
-    await invalidateCache("catalog", "products");
+    await invalidateCache("catalog", "products", "home");
     return category;
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -93,6 +93,82 @@ const createCategory = async (input: CreateCategoryInput) => {
 
     throw error;
   }
+};
+
+const updateCategory = async (id: string, input: UpdateCategoryInput) => {
+  const existing = await prisma.category.findUnique({
+    where: { id },
+    select: { id: true },
+  });
+
+  if (!existing) {
+    throw new NotFoundError("Category not found");
+  }
+
+  if (input.parentId === id) {
+    throw AppError.badRequest("A category cannot be its own parent");
+  }
+
+  if (input.parentId) {
+    const parent = await prisma.category.findUnique({
+      where: { id: input.parentId },
+      select: { id: true },
+    });
+
+    if (!parent) {
+      throw new NotFoundError("Parent category not found");
+    }
+  }
+
+  try {
+    const category = await prisma.category.update({
+      where: { id },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.slug !== undefined ? { slug: input.slug } : {}),
+        ...(input.description !== undefined ? { description: input.description } : {}),
+        ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+        ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      },
+      select: categorySelect,
+    });
+
+    await invalidateCache("catalog", "products", "home");
+    return category;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw AppError.conflict("A category with this slug already exists");
+    }
+
+    throw error;
+  }
+};
+
+const deleteCategory = async (id: string) => {
+  const existing = await prisma.category.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      _count: { select: { products: true, children: true } },
+    },
+  });
+
+  if (!existing) {
+    throw new NotFoundError("Category not found");
+  }
+
+  if (existing._count.products > 0) {
+    throw AppError.conflict("Move products out of this category before deleting it");
+  }
+
+  if (existing._count.children > 0) {
+    throw AppError.conflict("Remove child categories before deleting this one");
+  }
+
+  await prisma.category.delete({ where: { id } });
+  await invalidateCache("catalog", "products", "home");
 };
 
 const loadCategories = async (query: CategoryListQuery) => {
@@ -140,5 +216,7 @@ const getCategories = async (query: CategoryListQuery) => {
 
 export const categoryService = {
   createCategory,
+  updateCategory,
+  deleteCategory,
   getCategories,
 };

@@ -69,16 +69,20 @@ export const upstashCommand = async (
     throw new Error("REDIS_URL is not set");
   }
 
-  const response = await fetch(redis.url, {
+  const response = (await fetch(redis.url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${redis.token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(command),
-  });
+  })) as {
+    ok: boolean;
+    status: number;
+    json: () => Promise<{ result?: UpstashResult; error?: string }>;
+  };
 
-  const body = (await response.json()) as { result?: UpstashResult; error?: string };
+  const body = await response.json();
 
   if (!response.ok || body.error) {
     throw new Error(body.error || `Upstash request failed (${response.status})`);

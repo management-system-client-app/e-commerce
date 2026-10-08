@@ -3,6 +3,8 @@ import Stripe from "stripe";
 import { Prisma } from "../../../generated/prisma/client";
 import { env } from "../../app/config/env";
 import { prisma } from "../../app/config/prisma";
+import { sendOrderConfirmationEmail, sendPaymentRejectedEmail } from "../../utils/emailSender";
+import { sendOrderMail } from "../../utils/orderMail";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
 
@@ -176,7 +178,7 @@ const appBaseUrl = (): string => {
   return `http://localhost:${env.PORT}`;
 };
 
-const createCheckoutSession = async (userId: string, orderId: string) => {
+const createCheckoutSession = async (userId: string | null, orderId: string) => {
   const stripe = getStripe();
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -576,10 +578,316 @@ const collectCashOnDelivery = async (orderId: string) => {
   return updated;
 };
 
+const manualPaymentSelect = {
+  id: true,
+  provider: true,
+  status: true,
+  amount: true,
+  currency: true,
+  transactionId: true,
+  failureReason: true,
+  paidAt: true,
+  createdAt: true,
+  updatedAt: true,
+  order: {
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      total: true,
+      currency: true,
+      user: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.PaymentSelect;
+
+const phoneKey = (value: string): string => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 10 ? digits.slice(-10) : digits;
+};
+
+type ManualBuyer =
+  | { kind: "user"; userId: string; orderId: string }
+  | { kind: "guest"; orderNumber: string; phone: string };
+
+const submitManualPayment = async (buyer: ManualBuyer, transactionId: string) => {
+  const payment = await prisma.payment.findFirst({
+    where:
+      buyer.kind === "user"
+        ? {
+            orderId: buyer.orderId,
+            provider: { in: ["BKASH", "NAGAD"] },
+            order: { userId: buyer.userId, status: "PENDING" },
+          }
+        : {
+            provider: { in: ["BKASH", "NAGAD"] },
+            order: {
+              orderNumber: { equals: buyer.orderNumber, mode: "insensitive" },
+              userId: null,
+              status: "PENDING",
+            },
+          },
+    orderBy: { createdAt: "desc" },
+    include: { order: { select: { shippingPhone: true } } },
+  });
+
+  if (!payment) {
+    throw new NotFoundError("Manual payment not found");
+  }
+
+  if (buyer.kind === "guest" && phoneKey(payment.order.shippingPhone) !== phoneKey(buyer.phone)) {
+    throw new NotFoundError("Manual payment not found");
+  }
+
+  if (payment.status === "PAID") {
+    throw AppError.badRequest("This order is already paid");
+  }
+
+  if (payment.status === "PROCESSING") {
+    throw AppError.badRequest("A transaction id is already waiting for review");
+  }
+
+  if (payment.status !== "PENDING" && payment.status !== "FAILED") {
+    throw AppError.badRequest("This payment cannot accept a transaction id");
+  }
+
+  const ownRejected =
+    payment.metadata &&
+    typeof payment.metadata === "object" &&
+    !Array.isArray(payment.metadata) &&
+    Array.isArray(payment.metadata.rejectedTransactionIds)
+      ? payment.metadata.rejectedTransactionIds.filter((id): id is string => typeof id === "string")
+      : [];
+
+  if (ownRejected.includes(transactionId)) {
+    throw AppError.conflict("This transaction id is already used");
+  }
+
+  const candidates = await prisma.payment.findMany({
+    where: {
+      id: { not: payment.id },
+      OR: [
+        { transactionId },
+        { provider: { in: ["BKASH", "NAGAD"] }, status: "FAILED" },
+      ],
+    },
+    select: { transactionId: true, metadata: true },
+  });
+  const alreadyUsed = candidates.some((candidate) => {
+    if (candidate.transactionId === transactionId) {
+      return true;
+    }
+
+    if (
+      !candidate.metadata ||
+      typeof candidate.metadata !== "object" ||
+      Array.isArray(candidate.metadata) ||
+      !Array.isArray(candidate.metadata.rejectedTransactionIds)
+    ) {
+      return false;
+    }
+
+    return candidate.metadata.rejectedTransactionIds.includes(transactionId);
+  });
+
+  if (alreadyUsed) {
+    throw AppError.conflict("This transaction id is already used");
+  }
+
+  try {
+    return await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        transactionId,
+        status: "PROCESSING",
+        failureReason: null,
+      },
+      select: manualPaymentSelect,
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw AppError.conflict("This transaction id is already used");
+    }
+
+    throw error;
+  }
+};
+
+const listManualPayments = async () => {
+  return prisma.payment.findMany({
+    where: {
+      provider: { in: ["BKASH", "NAGAD"] },
+      status: "PROCESSING",
+    },
+    orderBy: { updatedAt: "asc" },
+    take: 100,
+    select: manualPaymentSelect,
+  });
+};
+
+const customerMail = (order: {
+  guestEmail: string | null;
+  shippingFullName: string;
+  user: { email: string; firstName: string; lastName: string } | null;
+}): { email: string; name: string } | null => {
+  const email = order.user?.email ?? order.guestEmail;
+
+  if (!email) {
+    return null;
+  }
+
+  return {
+    email,
+    name: order.user
+      ? `${order.user.firstName} ${order.user.lastName}`.trim()
+      : order.shippingFullName,
+  };
+};
+
+const approveManualPayment = async (paymentId: string) => {
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    include: {
+      order: {
+        select: {
+          id: true,
+          status: true,
+          orderNumber: true,
+          total: true,
+          currency: true,
+          guestEmail: true,
+          shippingFullName: true,
+          user: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!payment || (payment.provider !== "BKASH" && payment.provider !== "NAGAD")) {
+    throw new NotFoundError("Manual payment not found");
+  }
+
+  if (payment.status !== "PROCESSING" || !payment.transactionId) {
+    throw AppError.badRequest("This payment is not waiting for review");
+  }
+
+  if (payment.order.status !== "PENDING") {
+    throw AppError.badRequest("Only a pending order can be approved");
+  }
+
+  const paidAt = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const saved = await tx.payment.update({
+      where: { id: payment.id },
+      data: { status: "PAID", paidAt },
+      select: manualPaymentSelect,
+    });
+
+    await tx.order.update({
+      where: { id: payment.order.id },
+      data: { status: "CONFIRMED", paidAt },
+    });
+
+    return saved;
+  });
+
+  const approvedMail = customerMail(payment.order);
+
+  if (approvedMail) {
+    await sendOrderMail(() =>
+      sendOrderConfirmationEmail({
+        to: approvedMail.email,
+        customerName: approvedMail.name,
+        orderNumber: payment.order.orderNumber,
+        total: Number(payment.order.total),
+        currency: payment.order.currency,
+      }),
+    );
+  }
+
+  return updated;
+};
+
+const rejectManualPayment = async (paymentId: string, reason: string) => {
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    include: {
+      order: {
+        select: {
+          orderNumber: true,
+          status: true,
+          guestEmail: true,
+          shippingFullName: true,
+          user: { select: { firstName: true, lastName: true, email: true } },
+        },
+      },
+    },
+  });
+
+  if (!payment || (payment.provider !== "BKASH" && payment.provider !== "NAGAD")) {
+    throw new NotFoundError("Manual payment not found");
+  }
+
+  if (payment.status !== "PROCESSING" || !payment.transactionId) {
+    throw AppError.badRequest("This payment is not waiting for review");
+  }
+
+  if (payment.order.status !== "PENDING") {
+    throw AppError.badRequest("Only a pending order can be rejected");
+  }
+
+  const metadata =
+    payment.metadata && typeof payment.metadata === "object" && !Array.isArray(payment.metadata)
+      ? payment.metadata
+      : {};
+  const previous = Array.isArray(metadata.rejectedTransactionIds)
+    ? metadata.rejectedTransactionIds.filter((id): id is string => typeof id === "string")
+    : [];
+
+  const updated = await prisma.payment.update({
+    where: { id: payment.id },
+    data: {
+      status: "FAILED",
+      failureReason: reason,
+      transactionId: null,
+      metadata: {
+        ...metadata,
+        rejectedTransactionIds: [...previous, payment.transactionId],
+      },
+    },
+    select: manualPaymentSelect,
+  });
+
+  const rejectedMail = customerMail(payment.order);
+
+  if (rejectedMail) {
+    await sendOrderMail(() =>
+      sendPaymentRejectedEmail({
+        to: rejectedMail.email,
+        customerName: rejectedMail.name,
+        orderNumber: payment.order.orderNumber,
+        reason,
+      }),
+    );
+  }
+
+  return updated;
+};
+
 export const paymentService = {
   createPaymentIntent,
   createCheckoutSession,
   collectCashOnDelivery,
   confirmCheckoutSession,
   handleStripeWebhook,
+  submitManualPayment,
+  listManualPayments,
+  approveManualPayment,
+  rejectManualPayment,
 };

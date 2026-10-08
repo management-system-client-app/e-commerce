@@ -29,6 +29,14 @@ router.get(
   asyncHandler(productController.getAllProducts),
 );
 
+router.get("/best-sellers", asyncHandler(productController.getBestSellers));
+
+router.get(
+  "/:id/related",
+  validateRequest({ params: productIdParamSchema }),
+  asyncHandler(productController.getRelatedProducts),
+);
+
 router.get(
   "/:id",
   validateRequest({ params: productIdParamSchema }),

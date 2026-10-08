@@ -26,6 +26,7 @@ const publicAdminSelect = {
   lastName: true,
   email: true,
   role: true,
+  avatarUrl: true,
   isActive: true,
   lastLoginAt: true,
   createdAt: true,
@@ -134,8 +135,8 @@ const updateProfile = async (auth: AuthContext, input: UpdateProfileInput) => {
   const passwordHash = input.newPassword ? await hashPassword(input.newPassword) : undefined;
 
   if (auth.role === "ADMIN") {
-    if (input.phone !== undefined || input.avatarUrl !== undefined) {
-      throw AppError.badRequest("Admins can update name and password only");
+    if (input.phone !== undefined) {
+      throw AppError.badRequest("Admins can update name, photo, and password only");
     }
 
     const admin = await prisma.admin.update({
@@ -143,6 +144,7 @@ const updateProfile = async (auth: AuthContext, input: UpdateProfileInput) => {
       data: {
         ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
         ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+        ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
         ...(passwordHash ? { passwordHash } : {}),
       },
       select: publicAdminSelect,
