@@ -2,5 +2,7 @@ node_modules
 .env
 .env.local
 dist
-logs/
+logs/auploads/
 generated/prisma
+.vercel
+.env*

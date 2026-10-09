@@ -5,7 +5,7 @@ import { authRateLimiter, passwordResetRateLimiter } from "../../app/middlewares
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { authController } from "./auth.controller";
 import { oauthController } from "./oauth.controller";
-import { forgotPasswordSchema, loginSchema, resetPasswordSchema } from "./auth.validation";
+import { forgotPasswordSchema, loginSchema, resetPasswordSchema, verifyResetCodeSchema } from "./auth.validation";
 
 const router = Router();
 
@@ -40,6 +40,13 @@ router.post(
   passwordResetRateLimiter,
   validateRequest({ body: forgotPasswordSchema }),
   asyncHandler(authController.forgotAdminPassword),
+);
+
+router.post(
+  "/verify-reset-code",
+  passwordResetRateLimiter,
+  validateRequest({ body: verifyResetCodeSchema }),
+  asyncHandler(authController.verifyResetCode),
 );
 
 router.post(

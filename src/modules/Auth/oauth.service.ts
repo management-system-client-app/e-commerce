@@ -70,7 +70,14 @@ const redirectUri = (req: Request, provider: Provider): string => {
   return `${apiBaseUrl(req)}/api/v1/auth/${path}/callback`;
 };
 
-const readJson = async (response: globalThis.Response): Promise<Record<string, unknown>> => {
+type HttpResponse = {
+  ok: boolean;
+  text: () => Promise<string>;
+};
+
+const asHttp = (response: unknown): HttpResponse => response as HttpResponse;
+
+const readJson = async (response: HttpResponse): Promise<Record<string, unknown>> => {
   const text = await response.text();
 
   if (!text) {
@@ -188,19 +195,19 @@ const exchangeGoogle = async (req: Request, code: string): Promise<ProviderProfi
       grant_type: "authorization_code",
     }),
   });
-  const tokenBody = await readJson(tokenResponse);
+  const tokenBody = await readJson(asHttp(tokenResponse));
   const accessToken = asString(tokenBody.access_token);
 
-  if (!tokenResponse.ok || !accessToken) {
+  if (!asHttp(tokenResponse).ok || !accessToken) {
     throw new AppError("Google login failed", 502);
   }
 
   const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const profile = await readJson(profileResponse);
+  const profile = await readJson(asHttp(profileResponse));
 
-  if (!profileResponse.ok) {
+  if (!asHttp(profileResponse).ok) {
     throw new AppError("Google login failed", 502);
   }
 
@@ -228,10 +235,10 @@ const exchangeFacebook = async (req: Request, code: string): Promise<ProviderPro
   const tokenResponse = await fetch(
     `https://graph.facebook.com/v21.0/oauth/access_token?${tokenParams.toString()}`,
   );
-  const tokenBody = await readJson(tokenResponse);
+  const tokenBody = await readJson(asHttp(tokenResponse));
   const accessToken = asString(tokenBody.access_token);
 
-  if (!tokenResponse.ok || !accessToken) {
+  if (!asHttp(tokenResponse).ok || !accessToken) {
     throw new AppError("Facebook login failed", 502);
   }
 
@@ -240,9 +247,9 @@ const exchangeFacebook = async (req: Request, code: string): Promise<ProviderPro
     access_token: accessToken,
   });
   const profileResponse = await fetch(`https://graph.facebook.com/me?${profileParams.toString()}`);
-  const profile = await readJson(profileResponse);
+  const profile = await readJson(asHttp(profileResponse));
 
-  if (!profileResponse.ok) {
+  if (!asHttp(profileResponse).ok) {
     throw new AppError("Facebook login failed", 502);
   }
 

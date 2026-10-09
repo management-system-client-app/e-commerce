@@ -108,7 +108,7 @@ const resolveError = (error: unknown): ResolvedError => {
       error.code === "LIMIT_FILE_SIZE"
         ? "Each image must be 5MB or smaller"
         : error.code === "LIMIT_FILE_COUNT" || error.code === "LIMIT_UNEXPECTED_FILE"
-          ? "You can upload up to 5 images"
+          ? "You can upload up to 6 images"
           : "Image upload failed";
 
     return {

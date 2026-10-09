@@ -1,0 +1,3 @@
+ALTER TABLE "Order" ALTER COLUMN "userId" DROP NOT NULL;
+
+ALTER TABLE "Order" ADD COLUMN "guestEmail" TEXT;

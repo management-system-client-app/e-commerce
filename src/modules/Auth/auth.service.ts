@@ -31,6 +31,7 @@ const adminSelect = {
   lastName: true,
   email: true,
   role: true,
+  avatarUrl: true,
   isActive: true,
   lastLoginAt: true,
   createdAt: true,
@@ -172,15 +173,11 @@ const issuePasswordReset = async (
     });
     return {};
   } catch (error) {
-    if (env.NODE_ENV === "production") {
-      throw new AppError("Could not send the reset email", 503);
-    }
-
     console.error(
-      "Password reset email was not sent. Use the code in the response.",
+      "Password reset email was not sent.",
       error instanceof Error ? error.message : error,
     );
-    return { code };
+    throw new AppError("Could not send the reset email", 503);
   }
 };
 
@@ -258,6 +255,14 @@ const findResetOwner = async (
   });
 
   return match ? { adminId: admin.id } : null;
+};
+
+const verifyResetCode = async (input: { email: string; code: string }): Promise<void> => {
+  const owner = await findResetOwner(input.email, input.code);
+
+  if (!owner) {
+    throw AppError.badRequest("Reset code is invalid or has expired");
+  }
 };
 
 const resetPassword = async (input: ResetPasswordInput): Promise<void> => {
@@ -389,6 +394,7 @@ export const authService = {
   logout,
   forgotPassword,
   forgotAdminPassword,
+  verifyResetCode,
   resetPassword,
   ensureDefaultAdmin,
 };

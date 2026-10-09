@@ -44,6 +44,7 @@ export const sendEmail = async (message: EmailMessage): Promise<void> => {
 
   await mailer.sendMail({
     from: env.SMTP_FROM,
+    envelope: env.SMTP_USER ? { from: env.SMTP_USER, to: message.to } : undefined,
     to: message.to,
     subject: message.subject,
     text: message.text,
@@ -104,19 +105,24 @@ export const sendOrderConfirmationEmail = async (input: {
   orderNumber: string;
   total: number;
   currency: string;
+  items?: { name: string; quantity: number; lineTotal: number }[];
+  paymentNote?: string;
   invoicePdf?: Buffer;
 }): Promise<void> => {
   const total = money(input.total, input.currency);
   const customerName = escapeHtml(input.customerName);
   const orderNumber = escapeHtml(input.orderNumber);
+  const lines = input.items ?? [];
   const text = [
     `Hi ${input.customerName},`,
     "",
-    `Your order ${input.orderNumber} is confirmed.`,
+    `Your order ${input.orderNumber} is placed.`,
+    ...lines.map((item) => `${item.name} x ${item.quantity} — ${money(item.lineTotal, input.currency)}`),
     `Total: ${total}`,
+    input.paymentNote ?? "",
     "",
     "We will email you again when it ships.",
-  ].join("\n");
+  ].filter((line) => line !== undefined).join("\n");
 
   await sendEmail({
     to: input.to,
@@ -127,7 +133,9 @@ export const sendOrderConfirmationEmail = async (input: {
       preheader: `Order ${input.orderNumber} is confirmed. Total ${total}.`,
       body: `
         <p style="margin:0 0 16px;">Hi ${customerName},</p>
-        <p style="margin:0 0 24px;">Your order is confirmed. We will email you again when it ships.</p>
+        <p style="margin:0 0 24px;">Your order is placed. We will email you again when it ships.</p>
+        ${lines.map((item) => `<p style="margin:0 0 8px;">${escapeHtml(item.name)} × ${item.quantity} — ${escapeHtml(money(item.lineTotal, input.currency))}</p>`).join("")}
+        ${input.paymentNote ? `<p style="margin:16px 0;">${escapeHtml(input.paymentNote)}</p>` : ""}
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border-radius:12px;">
           <tr>
             <td style="padding:20px 24px;">
@@ -150,6 +158,113 @@ export const sendOrderConfirmationEmail = async (input: {
           },
         ]
       : undefined,
+  });
+};
+
+export const sendManualPaymentEmail = async (input: {
+  to: string;
+  customerName: string;
+  orderNumber: string;
+  total: number;
+  currency: string;
+  provider: "BKASH" | "NAGAD";
+  walletNumber: string;
+}): Promise<void> => {
+  const total = money(input.total, input.currency);
+  const provider = input.provider === "BKASH" ? "bKash" : "Nagad";
+  const text = [
+    `Hi ${input.customerName},`,
+    "",
+    `Order ${input.orderNumber} is waiting for payment.`,
+    `Send ${total} to ${provider} ${input.walletNumber}.`,
+    "Then submit the transaction id in the app. The order is confirmed after an admin approves it.",
+  ].join("\n");
+
+  await sendEmail({
+    to: input.to,
+    subject: `Pay for order ${input.orderNumber}`,
+    text,
+    html: emailLayout({
+      title: `Pay with ${provider}`,
+      preheader: `Send ${total} to ${provider} ${input.walletNumber} for order ${input.orderNumber}.`,
+      body: `
+        <p style="margin:0 0 16px;">Hi ${escapeHtml(input.customerName)},</p>
+        <p style="margin:0 0 24px;">Send the order total, then submit the transaction id. An admin will confirm the order after checking it.</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf7f2;border-radius:12px;">
+          <tr>
+            <td style="padding:20px 24px;">
+              <p style="margin:0;font-size:12px;letter-spacing:1px;color:#78716c;">ORDER</p>
+              <p style="margin:6px 0 0;font-size:20px;color:#1c1917;">${escapeHtml(input.orderNumber)}</p>
+            </td>
+            <td align="right" style="padding:20px 24px;">
+              <p style="margin:0;font-size:12px;letter-spacing:1px;color:#78716c;">SEND</p>
+              <p style="margin:6px 0 0;font-size:20px;color:#1c1917;">${escapeHtml(total)}</p>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" style="padding:0 24px 20px;">
+              <p style="margin:0;font-size:12px;letter-spacing:1px;color:#78716c;">${provider.toUpperCase()} NUMBER</p>
+              <p style="margin:6px 0 0;font-size:20px;color:#1c1917;">${escapeHtml(input.walletNumber)}</p>
+            </td>
+          </tr>
+        </table>`,
+    }),
+  });
+};
+
+export const sendPaymentRejectedEmail = async (input: {
+  to: string;
+  customerName: string;
+  orderNumber: string;
+  reason: string;
+}): Promise<void> => {
+  const text = [
+    `Hi ${input.customerName},`,
+    "",
+    `The payment for order ${input.orderNumber} was not approved.`,
+    input.reason,
+    "",
+    "You can submit a new transaction id.",
+  ].join("\n");
+
+  await sendEmail({
+    to: input.to,
+    subject: `Payment not approved for ${input.orderNumber}`,
+    text,
+    html: emailLayout({
+      title: "Payment not approved",
+      preheader: `The payment for order ${input.orderNumber} was not approved.`,
+      body: `
+        <p style="margin:0 0 16px;">Hi ${escapeHtml(input.customerName)},</p>
+        <p style="margin:0 0 16px;">The payment for order ${escapeHtml(input.orderNumber)} was not approved.</p>
+        <p style="margin:0 0 16px;">${escapeHtml(input.reason)}</p>
+        <p style="margin:0;">You can submit a new transaction id.</p>`,
+    }),
+  });
+};
+
+export const sendOrderShippedEmail = async (input: {
+  to: string;
+  customerName: string;
+  orderNumber: string;
+}): Promise<void> => {
+  const text = [
+    `Hi ${input.customerName},`,
+    "",
+    `Order ${input.orderNumber} has shipped.`,
+  ].join("\n");
+
+  await sendEmail({
+    to: input.to,
+    subject: `Order ${input.orderNumber} shipped`,
+    text,
+    html: emailLayout({
+      title: "Order shipped",
+      preheader: `Order ${input.orderNumber} has shipped.`,
+      body: `
+        <p style="margin:0 0 16px;">Hi ${escapeHtml(input.customerName)},</p>
+        <p style="margin:0;">Order ${escapeHtml(input.orderNumber)} has shipped.</p>`,
+    }),
   });
 };
 

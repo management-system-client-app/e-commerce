@@ -17,7 +17,9 @@ const createProduct = async (
   const uploaded =
     files.length === 0
       ? []
-      : await Promise.all(files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products")));
+      : await Promise.all(
+          files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products", file.mimetype, file.originalname)),
+        );
 
   try {
     const product = await productService.createProduct(
@@ -53,6 +55,29 @@ const getAllProducts = async (
   });
 };
 
+const getBestSellers = async (_req: ValidatedRequest, res: Response): Promise<void> => {
+  const products = await productService.getBestSellers();
+
+  res.status(200).json({
+    success: true,
+    message: "Best sellers fetched",
+    data: products,
+  });
+};
+
+const getRelatedProducts = async (
+  req: ValidatedRequest<unknown, ProductIdParam>,
+  res: Response,
+): Promise<void> => {
+  const products = await productService.getRelatedProducts(req.validatedParams.id);
+
+  res.status(200).json({
+    success: true,
+    message: "Related products fetched",
+    data: products,
+  });
+};
+
 const getSingleProduct = async (
   req: ValidatedRequest<unknown, ProductIdParam>,
   res: Response,
@@ -72,7 +97,25 @@ const updateProduct = async (
   res: Response,
 ): Promise<void> => {
   const { id } = req.validatedParams;
-  const product = await productService.updateProduct(id, req.validatedBody);
+  const files = Array.isArray(req.files) ? req.files : [];
+  const uploaded =
+    files.length === 0
+      ? []
+      : await Promise.all(
+          files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products", file.mimetype, file.originalname)),
+        );
+
+  let product;
+  try {
+    product = await productService.updateProduct(
+      id,
+      req.validatedBody,
+      uploaded.map((image) => ({ url: image.url, alt: req.validatedBody.name ?? "" })),
+    );
+  } catch (error) {
+    await deleteCloudinaryImages(uploaded.map((image) => image.publicId));
+    throw error;
+  }
 
   res.status(200).json({
     success: true,
@@ -86,17 +129,22 @@ const deleteProduct = async (
   res: Response,
 ): Promise<void> => {
   const { id } = req.validatedParams;
-  await productService.deleteProduct(id);
+  const result = await productService.deleteProduct(id);
 
   res.status(200).json({
     success: true,
-    message: "Product deleted",
+    message: result.archived
+      ? "Product archived. It stays on past orders and is hidden from the shop."
+      : "Product deleted",
+    data: result,
   });
 };
 
 export const productController = {
   createProduct,
   getAllProducts,
+  getBestSellers,
+  getRelatedProducts,
   getSingleProduct,
   updateProduct,
   deleteProduct,

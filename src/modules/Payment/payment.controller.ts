@@ -2,7 +2,12 @@ import type { Request, Response } from "express";
 import { AppError } from "../../app/errors/AppError";
 import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
 import { paymentService } from "./payment.service";
-import type { CreatePaymentIntentInput } from "./payment.validation";
+import type {
+  CreatePaymentIntentInput,
+  ManualPaymentIdParam,
+  RejectManualPaymentInput,
+  SubmitManualPaymentInput,
+} from "./payment.validation";
 
 const createIntent = async (
   req: ValidatedRequest<CreatePaymentIntentInput>,
@@ -101,6 +106,83 @@ const checkoutCancel = async (_req: Request, res: Response): Promise<void> => {
 </html>`);
 };
 
+const submitManualPayment = async (
+  req: ValidatedRequest<SubmitManualPaymentInput>,
+  res: Response,
+): Promise<void> => {
+  if (req.auth?.role === "ADMIN") {
+    throw AppError.forbidden("Only customers can submit a transaction id");
+  }
+
+  const buyer =
+    req.auth?.role === "USER"
+      ? {
+          kind: "user" as const,
+          userId: req.auth.id,
+          orderId: req.validatedBody.orderId ?? "",
+        }
+      : {
+          kind: "guest" as const,
+          orderNumber: req.validatedBody.orderNumber ?? "",
+          phone: req.validatedBody.phone ?? "",
+        };
+
+  if (buyer.kind === "user" && !req.validatedBody.orderId) {
+    throw AppError.badRequest("orderId is required");
+  }
+
+  if (buyer.kind === "guest" && (!req.validatedBody.orderNumber || !req.validatedBody.phone)) {
+    throw AppError.badRequest("orderNumber and phone are required");
+  }
+
+  const payment = await paymentService.submitManualPayment(buyer, req.validatedBody.transactionId);
+
+  res.status(200).json({
+    success: true,
+    message: "Transaction id submitted",
+    data: payment,
+  });
+};
+
+const listManualPayments = async (_req: ValidatedRequest, res: Response): Promise<void> => {
+  const payments = await paymentService.listManualPayments();
+
+  res.status(200).json({
+    success: true,
+    message: "Manual payments fetched",
+    data: payments,
+  });
+};
+
+const approveManualPayment = async (
+  req: ValidatedRequest<unknown, ManualPaymentIdParam>,
+  res: Response,
+): Promise<void> => {
+  const payment = await paymentService.approveManualPayment(req.validatedParams.id);
+
+  res.status(200).json({
+    success: true,
+    message: "Payment approved",
+    data: payment,
+  });
+};
+
+const rejectManualPayment = async (
+  req: ValidatedRequest<RejectManualPaymentInput, ManualPaymentIdParam>,
+  res: Response,
+): Promise<void> => {
+  const payment = await paymentService.rejectManualPayment(
+    req.validatedParams.id,
+    req.validatedBody.reason,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Payment rejected",
+    data: payment,
+  });
+};
+
 const handleWebhook = async (req: Request, res: Response): Promise<void> => {
   const signature = req.headers["stripe-signature"];
 
@@ -126,5 +208,9 @@ export const paymentController = {
   createCheckout,
   checkoutSuccess,
   checkoutCancel,
+  submitManualPayment,
+  listManualPayments,
+  approveManualPayment,
+  rejectManualPayment,
   handleWebhook,
 };

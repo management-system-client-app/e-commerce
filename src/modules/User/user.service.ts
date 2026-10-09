@@ -4,7 +4,7 @@ import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
 import type { AuthContext } from "../../app/middlewares/auth";
 import { comparePassword, hashPassword } from "../../utils/bcrypt";
-import type { RegisterUserInput, UpdateProfileInput } from "./user.validation";
+import type { RegisterUserInput, SaveAddressInput, UpdateProfileInput } from "./user.validation";
 
 const publicUserSelect = {
   id: true,
@@ -26,6 +26,7 @@ const publicAdminSelect = {
   lastName: true,
   email: true,
   role: true,
+  avatarUrl: true,
   isActive: true,
   lastLoginAt: true,
   createdAt: true,
@@ -134,8 +135,8 @@ const updateProfile = async (auth: AuthContext, input: UpdateProfileInput) => {
   const passwordHash = input.newPassword ? await hashPassword(input.newPassword) : undefined;
 
   if (auth.role === "ADMIN") {
-    if (input.phone !== undefined || input.avatarUrl !== undefined) {
-      throw AppError.badRequest("Admins can update name and password only");
+    if (input.phone !== undefined) {
+      throw AppError.badRequest("Admins can update name, photo, and password only");
     }
 
     const admin = await prisma.admin.update({
@@ -143,6 +144,7 @@ const updateProfile = async (auth: AuthContext, input: UpdateProfileInput) => {
       data: {
         ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
         ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+        ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
         ...(passwordHash ? { passwordHash } : {}),
       },
       select: publicAdminSelect,
@@ -172,9 +174,48 @@ const updateProfile = async (auth: AuthContext, input: UpdateProfileInput) => {
   };
 };
 
+const addressSelect = {
+  id: true,
+  label: true,
+  fullName: true,
+  phone: true,
+  line1: true,
+  line2: true,
+  city: true,
+  state: true,
+  postalCode: true,
+  country: true,
+  isDefault: true,
+} satisfies Prisma.AddressSelect;
+
+const getDefaultAddress = (userId: string) =>
+  prisma.address.findFirst({
+    where: { userId },
+    orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+    select: addressSelect,
+  });
+
+const saveDefaultAddress = (userId: string, input: SaveAddressInput) =>
+  prisma.$transaction(async (tx) => {
+    const existing = await tx.address.findFirst({
+      where: { userId },
+      orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }],
+      select: { id: true },
+    });
+
+    await tx.address.updateMany({ where: { userId, isDefault: true }, data: { isDefault: false } });
+
+    const data = { ...input, label: input.label ?? "Home", isDefault: true };
+    return existing
+      ? tx.address.update({ where: { id: existing.id }, data, select: addressSelect })
+      : tx.address.create({ data: { ...data, userId }, select: addressSelect });
+  });
+
 export const userService = {
   createUser,
   getUserById,
   getCurrentAccount,
   updateProfile,
+  getDefaultAddress,
+  saveDefaultAddress,
 };

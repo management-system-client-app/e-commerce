@@ -4,7 +4,7 @@ import type { ValidatedRequest } from "../../app/middlewares/validateRequest";
 import { cartService } from "../Cart/cart.service";
 import { clearCartSessionCookie, readCartSessionId } from "../Cart/cart.session";
 import { authService } from "./auth.service";
-import type { ForgotPasswordInput, LoginInput, ResetPasswordInput } from "./auth.validation";
+import type { ForgotPasswordInput, LoginInput, ResetPasswordInput, VerifyResetCodeInput } from "./auth.validation";
 
 const login = async (
   req: ValidatedRequest<LoginInput>,
@@ -64,6 +64,18 @@ const forgotAdminPassword = async (
   });
 };
 
+const verifyResetCode = async (
+  req: ValidatedRequest<VerifyResetCodeInput>,
+  res: Response,
+): Promise<void> => {
+  await authService.verifyResetCode(req.validatedBody);
+
+  res.status(200).json({
+    success: true,
+    message: "Code accepted",
+  });
+};
+
 const resetPassword = async (
   req: ValidatedRequest<ResetPasswordInput>,
   res: Response,
@@ -102,5 +114,6 @@ export const authController = {
   logout,
   forgotPassword,
   forgotAdminPassword,
+  verifyResetCode,
   resetPassword,
 };
