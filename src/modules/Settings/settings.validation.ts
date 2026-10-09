@@ -14,10 +14,23 @@ export const updateSettingsSchema = z
     bkashNumber: z.string().trim().min(7).max(20).nullable().optional(),
     nagadNumber: z.string().trim().min(7).max(20).nullable().optional(),
     rocketNumber: z.string().trim().min(7).max(20).nullable().optional(),
+    collageManImageUrl: z.url().nullable().optional(),
+    collageWomanImageUrl: z.url().nullable().optional(),
+    collageChildImageUrl: z.url().nullable().optional(),
+    collageAccessoriesImageUrl: z.url().nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {
     message: "At least one field is required",
   });
 
+export const collageImageSlotSchema = z.object({
+  slot: z.enum(["man", "woman", "child", "accessories"]),
+});
+
+export const uploadCollageImageSchema = z.object({
+  imageUrl: z.url(),
+});
+
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+export type CollageImageSlot = z.infer<typeof collageImageSlotSchema>["slot"];

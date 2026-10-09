@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { coverImage, money, productFlags } from "../format";
 import type { ProductCardData } from "../types";
@@ -48,21 +47,11 @@ export function ProductCarousel({
   products: ProductCardData[];
   showAvailableStock?: boolean;
 }) {
-  const row = useRef<HTMLDivElement>(null);
-
-  function move(direction: -1 | 1) {
-    const element = row.current;
-    if (!element) return;
-    element.scrollBy({ left: direction * element.clientWidth * 0.8, behavior: "smooth" });
-  }
-
   return (
     <div className="product-carousel">
-      <button type="button" className="carousel-arrow prev" aria-label="Previous products" title="Previous products" onClick={() => move(-1)}>‹</button>
-      <div className="product-row" ref={row}>
+      <div className="product-row">
         {products.map((product) => <ProductCard key={product.id} product={product} showAvailableStock={showAvailableStock} />)}
       </div>
-      <button type="button" className="carousel-arrow next" aria-label="Next products" title="Next products" onClick={() => move(1)}>›</button>
     </div>
   );
 }

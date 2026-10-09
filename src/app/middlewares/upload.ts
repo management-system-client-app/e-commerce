@@ -88,6 +88,18 @@ export const parseMultipartData = (req: Request, _res: Response, next: NextFunct
 };
 
 export const singleImageUpload = upload.single("image");
+const imageOnlyUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (_req, file, callback) => {
+    if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+      callback(null, true);
+      return;
+    }
+    callback(AppError.badRequest("Only JPEG, PNG, and WebP images are allowed"));
+  },
+  limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
+});
+export const singleImageOnlyUpload = imageOnlyUpload.single("image");
 export const singleHomeMediaUpload = homeMediaUpload.single("image");
 
 /** When a multipart request includes `image`, upload it and set `imageUrl` on the JSON body. */

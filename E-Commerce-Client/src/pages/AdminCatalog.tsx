@@ -1,10 +1,20 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Fragment, useEffect, useState } from "react";
 import { ApiError, api } from "../api";
 import { RowsSkeleton } from "../components/Skeleton";
-import type { AdminHomeBlock, Category, ProductCardData } from "../types";
+import { coverImage } from "../format";
+import { useStore } from "../state";
+import type { AdminHomeBlock, Category, ProductCardData, Settings } from "../types";
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#2ec9a8]";
+
+type CollageSlot = "man" | "woman" | "child" | "accessories";
+const COLLAGE_SLOTS: { id: CollageSlot; label: string; setting: keyof Settings }[] = [
+  { id: "man", label: "Man", setting: "collageManImageUrl" },
+  { id: "woman", label: "Woman", setting: "collageWomanImageUrl" },
+  { id: "child", label: "Child", setting: "collageChildImageUrl" },
+  { id: "accessories", label: "Accessories", setting: "collageAccessoriesImageUrl" },
+];
 
 const KINDS = [
   { id: "BANNER", label: "Slider banner" },
@@ -12,6 +22,22 @@ const KINDS = [
   { id: "NEW_ARRIVAL", label: "New arrivals" },
   { id: "TRENDING", label: "Trending Now products" },
 ] as const;
+
+function placementFor(block: AdminHomeBlock, orderedKindBlocks: AdminHomeBlock[]) {
+  if (!block.isActive) return "Hidden — not shown on homepage";
+
+  const activeBlocks = orderedKindBlocks.filter((item) => item.isActive);
+  const position = activeBlocks.findIndex((item) => item.id === block.id) + 1;
+
+  if (block.kind === "BANNER") return `Top slider · Slide ${position}`;
+  if (block.kind === "NEW_ARRIVAL") return "New Collection product row";
+  if (block.kind === "TRENDING") return "Trending Now product row";
+  if (position <= 3) return `Top-right offer ${position}`;
+  if (position === 4) return "Large campaign tile 1";
+  if (position === 5) return "Large campaign tile 2";
+  if (position <= 9) return `Small campaign tile ${position - 5}`;
+  return "Not displayed on homepage";
+}
 
 function messageOf(reason: unknown, fallback: string) {
   if (!(reason instanceof ApiError)) return fallback;
@@ -216,6 +242,7 @@ export function AdminCategories() {
 }
 
 export function AdminBanners() {
+  const { settings, updateSettings } = useStore();
   const [blocks, setBlocks] = useState<AdminHomeBlock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,6 +256,15 @@ export function AdminBanners() {
   const [isActive, setIsActive] = useState(true);
   const [image, setImage] = useState<File | null>(null);
   const [currentImage, setCurrentImage] = useState<string | null>(null);
+  const [collageFiles, setCollageFiles] = useState<Record<CollageSlot, File | null>>({
+    man: null,
+    woman: null,
+    child: null,
+    accessories: null,
+  });
+  const [collageUploading, setCollageUploading] = useState<CollageSlot | null>(null);
+  const [collageError, setCollageError] = useState("");
+  const [collageNote, setCollageNote] = useState("");
   const [productSearch, setProductSearch] = useState("");
   const [productOptions, setProductOptions] = useState<ProductCardData[]>([]);
   const [selectedProducts, setSelectedProducts] = useState<ProductCardData[]>([]);
@@ -344,6 +380,7 @@ export function AdminBanners() {
   }
 
   return (
+    <div className="space-y-5">
     <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
       <form key={formKey} onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-semibold">{editing ? "Edit banner" : "Add banner"}</h2>
@@ -359,7 +396,7 @@ export function AdminBanners() {
         </label>
         {kind === "CAMPAIGN" ? (
           <p className="text-xs leading-relaxed text-slate-500">
-            The first four active offer banners by Sort order appear in the homepage category collage as Man, Woman, Child, and Accessories. Edit each offer banner here to replace its image or video.
+            Active offer banners are placed by Sort order: the first three appear beside the top slider. Additional offers fill the campaign tiles above New Collection.
           </p>
         ) : null}
         {kind === "TRENDING" ? (
@@ -469,53 +506,124 @@ export function AdminBanners() {
           ) : null}
         </div>
       </form>
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs tracking-wide text-slate-500 uppercase">
-            <tr>
-              <th className="px-4 py-3 font-medium">Banner</th>
-              <th className="px-4 py-3 font-medium">Type</th>
-              <th className="px-4 py-3 font-medium"> </th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? <tr><td colSpan={5} className="p-4"><RowsSkeleton rows={5} columns={5} /></td></tr> : blocks.map((block) => (
-              <tr key={block.id} className="border-t border-slate-100">
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    {block.imageUrl ? (
-                      isVideoUrl(block.imageUrl) ? (
-                        <video src={block.imageUrl} controls className="h-12 w-20 rounded-lg object-cover" />
-                      ) : (
-                        <img src={block.imageUrl} alt="" className="h-12 w-20 rounded-lg object-cover" />
-                      )
-                    ) : (
-                      <span className="grid h-12 w-20 place-items-center rounded-lg bg-slate-100 text-xs text-slate-400">None</span>
-                    )}
-                    <span>
-                      <span className="block font-medium">{block.title}</span>
-                      <span className="text-xs text-slate-500">
-                        {block.isActive ? "Active" : "Hidden"}
-                        {block.kind === "TRENDING" ? ` · ${block.productIds.length} selected` : ""}
-                      </span>
-                    </span>
+      <div className="space-y-4">
+        {loading ? <RowsSkeleton rows={5} columns={2} /> : null}
+        {!loading && blocks.length === 0 && !error ? (
+          <p className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-sm text-slate-500">
+            No banners yet. Add a slider banner to show it on the home page.
+          </p>
+        ) : null}
+        {!loading && KINDS.map((item) => {
+          const group = blocks
+            .filter((block) => block.kind === item.id)
+            .sort((first, second) => first.sortOrder - second.sortOrder);
+          if (group.length === 0 && item.id !== "CAMPAIGN") return null;
+
+          return (
+            <Fragment key={item.id}>
+              {group.length > 0 ? (
+                <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                  <header className="border-b border-slate-100 bg-slate-50 px-4 py-3">
+                    <h2 className="text-sm font-semibold text-slate-800">{item.label}</h2>
+                  </header>
+                  <div className="divide-y divide-slate-100">
+                    {group.map((block) => (
+                      <article key={block.id} className="flex flex-wrap items-center gap-3 p-4">
+                        {block.imageUrl ? (
+                          isVideoUrl(block.imageUrl) ? (
+                            <video src={block.imageUrl} muted className="h-16 w-24 shrink-0 rounded-lg bg-slate-100 object-contain" />
+                          ) : (
+                            <img src={block.imageUrl} alt="" className="h-16 w-24 shrink-0 rounded-lg bg-slate-100 object-contain" />
+                          )
+                        ) : block.kind === "TRENDING" && block.products?.[0] && coverImage(block.products[0]) ? (
+                          <img
+                            src={coverImage(block.products[0]) ?? ""}
+                            alt={block.products[0].name}
+                            className="h-16 w-24 shrink-0 rounded-lg bg-slate-100 object-contain"
+                          />
+                        ) : (
+                          <span className="grid h-16 w-24 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs text-slate-400">
+                            {block.productIds.length} products
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-slate-800">{block.title}</p>
+                          <p className="mt-1 text-xs font-medium text-[#147a65]">
+                            {placementFor(block, group)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Sort order: {block.sortOrder} · {block.isActive ? "Active" : "Hidden"}
+                            {block.kind === "TRENDING" ? ` · ${block.productIds.length} selected` : ""}
+                          </p>
+                        </div>
+                        <div className="ml-auto flex shrink-0 gap-3 text-sm">
+                          <button type="button" className="font-medium text-[#163a8a]" onClick={() => startEdit(block)}>
+                            Edit
+                          </button>
+                          <button type="button" className="text-rose-700" onClick={() => remove(block)}>
+                            Delete
+                          </button>
+                        </div>
+                      </article>
+                    ))}
                   </div>
-                </td>
-                <td className="px-4 py-3 text-slate-600">{KINDS.find((item) => item.id === block.kind)?.label ?? block.kind}</td>
-                <td className="px-4 py-3 text-right">
-                  <button type="button" className="mr-3 font-medium text-[#163a8a]" onClick={() => startEdit(block)}>
-                    Edit
-                  </button>
-                  <button type="button" className="text-rose-700" onClick={() => remove(block)}>
-                    Delete
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!loading && blocks.length === 0 && !error ? <p className="px-4 py-8 text-sm text-slate-500">No banners yet. Add a slider banner to show it on the home page.</p> : null}
-      </section>
+                </section>
+              ) : null}
+              {item.id === "CAMPAIGN" ? (
+                <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <header className="mb-4">
+                    <h2 className="text-sm font-semibold">Category collage images</h2>
+                    <p className="mt-1 text-xs text-slate-500">Upload separate images for Man, Woman, Child, and Accessories. These slots are independent of slider and offer banners.</p>
+                  </header>
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    {COLLAGE_SLOTS.map(({ id, label, setting }) => (
+                      <div key={id} className="space-y-2 rounded-xl border border-slate-100 p-3">
+                        <p className="text-sm font-medium text-slate-700">{label}</p>
+                        {settings[setting] ? (
+                          <img src={settings[setting] ?? ""} alt={`${label} collage`} className="h-28 w-full rounded-lg bg-slate-100 object-cover" />
+                        ) : (
+                          <div className="grid h-28 place-items-center rounded-lg bg-slate-50 text-xs text-slate-400">No image uploaded</div>
+                        )}
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="block w-full text-sm"
+                          onChange={(event) => setCollageFiles((files) => ({ ...files, [id]: event.target.files?.[0] ?? null }))}
+                        />
+                        <button
+                          type="button"
+                          disabled={!collageFiles[id] || collageUploading !== null}
+                          className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                          onClick={() => {
+                            const file = collageFiles[id];
+                            if (!file) return;
+                            setCollageError("");
+                            setCollageNote("");
+                            setCollageUploading(id);
+                            api.uploadCollageImage(id, file)
+                              .then(({ imageUrl }) => {
+                                updateSettings({ ...settings, [setting]: imageUrl });
+                                setCollageFiles((files) => ({ ...files, [id]: null }));
+                                setCollageNote(`${label} collage image saved`);
+                              })
+                              .catch((reason) => setCollageError(messageOf(reason, `Could not save ${label.toLowerCase()} image`)))
+                              .finally(() => setCollageUploading(null));
+                          }}
+                        >
+                          {collageUploading === id ? "Uploading…" : "Upload image"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {collageError ? <p className="mt-3 text-sm text-rose-700">{collageError}</p> : null}
+                  {collageNote ? <p className="mt-3 text-sm text-emerald-700">{collageNote}</p> : null}
+                </section>
+              ) : null}
+            </Fragment>
+          );
+        })}
+      </div>
+    </div>
     </div>
   );
 }

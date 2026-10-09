@@ -15,6 +15,10 @@ export type Settings = {
   bkashNumber: string | null;
   nagadNumber: string | null;
   rocketNumber: string | null;
+  collageManImageUrl: string | null;
+  collageWomanImageUrl: string | null;
+  collageChildImageUrl: string | null;
+  collageAccessoriesImageUrl: string | null;
 };
 
 export type Category = {

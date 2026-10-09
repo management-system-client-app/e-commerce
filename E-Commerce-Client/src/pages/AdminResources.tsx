@@ -590,8 +590,14 @@ export function AdminSizeGuides() {
           api.saveSizeGuide({
             categoryId,
             title,
-            columns: ["Size", "Chest", "Length"],
-            rows: [["M", "38", "27"], ["L", "40", "28"]],
+            columns: ["Size", "Bust (in)", "Waist (in)", "Length (in)"],
+            rows: [
+              ["XS", "32", "26", "42"],
+              ["S", "34", "28", "44"],
+              ["M", "36", "30", "46"],
+              ["L", "38", "32", "48"],
+              ["XL", "40", "34", "50"],
+            ],
           }).then(() => {
             setTitle("");
             load();

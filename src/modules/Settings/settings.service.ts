@@ -18,6 +18,10 @@ const emptySettings = {
   bkashNumber: null,
   nagadNumber: null,
   rocketNumber: null,
+  collageManImageUrl: null,
+  collageWomanImageUrl: null,
+  collageChildImageUrl: null,
+  collageAccessoriesImageUrl: null,
 };
 
 const getSettings = async () => {
@@ -40,6 +44,10 @@ const getSettings = async () => {
       bkashNumber: settings.bkashNumber,
       nagadNumber: settings.nagadNumber,
       rocketNumber: settings.rocketNumber,
+      collageManImageUrl: settings.collageManImageUrl,
+      collageWomanImageUrl: settings.collageWomanImageUrl,
+      collageChildImageUrl: settings.collageChildImageUrl,
+      collageAccessoriesImageUrl: settings.collageAccessoriesImageUrl,
     };
   });
 };
@@ -60,6 +68,10 @@ const updateSettings = async (input: UpdateSettingsInput) => {
       bkashNumber: input.bkashNumber,
       nagadNumber: input.nagadNumber,
       rocketNumber: input.rocketNumber,
+      collageManImageUrl: input.collageManImageUrl,
+      collageWomanImageUrl: input.collageWomanImageUrl,
+      collageChildImageUrl: input.collageChildImageUrl,
+      collageAccessoriesImageUrl: input.collageAccessoriesImageUrl,
     },
   });
 
@@ -75,6 +87,10 @@ const updateSettings = async (input: UpdateSettingsInput) => {
     bkashNumber: settings.bkashNumber,
     nagadNumber: settings.nagadNumber,
     rocketNumber: settings.rocketNumber,
+    collageManImageUrl: settings.collageManImageUrl,
+    collageWomanImageUrl: settings.collageWomanImageUrl,
+    collageChildImageUrl: settings.collageChildImageUrl,
+    collageAccessoriesImageUrl: settings.collageAccessoriesImageUrl,
   };
 };
 

@@ -107,12 +107,17 @@ async function performRequest<T>(path: string, init: RequestInit): Promise<Envel
   return body;
 }
 
-function request<T>(path: string, init: RequestInit = {}): Promise<Envelope<T>> {
+function request<T>(
+  path: string,
+  init: RequestInit = {},
+  options: { fresh?: boolean } = {},
+): Promise<Envelope<T>> {
   const method = (init.method ?? "GET").toUpperCase();
   const cacheable = method === "GET" && shouldCacheGet(path);
+  const useCache = cacheable && !options.fresh;
   const key = `${sessionStore.token() ?? "guest"}:${path}`;
 
-  if (cacheable) {
+  if (useCache) {
     const cached = getCache.get(key);
     if (cached) return Promise.resolve(cached as Envelope<T>);
     const pending = pendingGets.get(key);
@@ -123,13 +128,13 @@ function request<T>(path: string, init: RequestInit = {}): Promise<Envelope<T>> 
   const requestPromise = performRequest<T>(path, init).then((result) => {
     if (method !== "GET") {
       clearApiCache();
-    } else if (cacheable && version === cacheVersion) {
+    } else if (useCache && version === cacheVersion) {
       getCache.set(key, result as Envelope<unknown>);
     }
     return result;
   });
 
-  if (cacheable) {
+  if (useCache) {
     const pending = requestPromise as Promise<Envelope<unknown>>;
     pendingGets.set(key, pending);
     const clearPending = () => {
@@ -205,7 +210,7 @@ export const api = {
   },
   deleteHomeBlock: (id: string) =>
     request<unknown>(`/home/${id}`, { method: "DELETE" }).then((res) => res.data),
-  home: () => request<HomePayload>("/home").then((res) => res.data),
+  home: (fresh = false) => request<HomePayload>("/home", {}, { fresh }).then((res) => res.data),
   promotions: () => request<Promotion[]>("/promotions/active").then((res) => res.data),
   pages: () => request<CmsPage[]>("/pages").then((res) => res.data),
   page: (slug: string) => request<CmsPage>(`/pages/${encodeURIComponent(slug)}`).then((res) => res.data),
@@ -479,6 +484,14 @@ export const api = {
     request<unknown>(`/newsletter/${id}`, { method: "DELETE" }).then((res) => res.data),
   updateSettings: (body: Partial<Settings>) =>
     request<Settings>("/settings", { method: "PUT", body: JSON.stringify(body) }).then((res) => res.data),
+  uploadCollageImage: (slot: "man" | "woman" | "child" | "accessories", image: File) => {
+    const body = new FormData();
+    body.append("image", image);
+    return request<{ slot: typeof slot; imageUrl: string }>(`/settings/collage-images/${slot}`, {
+      method: "POST",
+      body,
+    }).then((res) => res.data);
+  },
   returns: () => request<StoreReturn[]>("/returns?limit=100").then((res) => res.data),
   returnOne: (id: string) => request<StoreReturn>(`/returns/${id}`).then((res) => res.data),
   createReturn: (body: Record<string, unknown>) =>

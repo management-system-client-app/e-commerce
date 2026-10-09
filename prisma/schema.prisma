@@ -419,6 +419,10 @@ model StoreSetting {
   bkashNumber  String?
   nagadNumber  String?
   rocketNumber String?
+  collageManImageUrl         String?
+  collageWomanImageUrl       String?
+  collageChildImageUrl       String?
+  collageAccessoriesImageUrl String?
   updatedAt    DateTime @updatedAt
 }
 

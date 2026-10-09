@@ -235,6 +235,7 @@ export function useCart() {
 
 type StoreValue = {
   settings: Settings;
+  updateSettings: (settings: Settings) => void;
   settingsReady: boolean;
   catalog: Catalog;
   catalogReady: boolean;
@@ -254,6 +255,10 @@ const fallbackSettings: Settings = {
   bkashNumber: null,
   nagadNumber: null,
   rocketNumber: null,
+  collageManImageUrl: null,
+  collageWomanImageUrl: null,
+  collageChildImageUrl: null,
+  collageAccessoriesImageUrl: null,
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -291,7 +296,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ settings, settingsReady, catalog, catalogReady, categoryImages, promo }),
+    () => ({ settings, updateSettings: setSettings, settingsReady, catalog, catalogReady, categoryImages, promo }),
     [settings, settingsReady, catalog, catalogReady, categoryImages, promo],
   );
 
