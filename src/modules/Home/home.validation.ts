@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const homeBlockKinds = ["BANNER", "CAMPAIGN", "NEW_ARRIVAL"] as const;
+const homeBlockKinds = ["BANNER", "CAMPAIGN", "NEW_ARRIVAL", "TRENDING"] as const;
 
 const optionalText = (max: number) =>
   z.string().trim().min(1).max(max).nullable().optional();
@@ -11,6 +11,9 @@ const homeBlockFields = {
   title: z.string().trim().min(2).max(160),
   subtitle: optionalText(300),
   imageUrl: z.url().nullable().optional(),
+  productIds: z.array(z.uuid()).max(24).refine((ids) => new Set(ids).size === ids.length, {
+    message: "Products must not contain duplicates",
+  }).optional(),
   linkUrl: optionalText(500),
   categoryId: z.uuid().nullable().optional(),
   sortOrder: z.number().int().min(0).max(10_000).optional(),

@@ -1,15 +1,17 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, api } from "../api";
+import { RowsSkeleton } from "../components/Skeleton";
 import { money, titleCaseStatus } from "../format";
 import { useAuth, useCart, useStore } from "../state";
-import type { OrderResult } from "../types";
+import type { OrderResult, SavedAddress } from "../types";
 
 const payments = [
   { id: "COD", label: "Cash on delivery" },
   { id: "STRIPE", label: "Card" },
-  { id: "BKASH", label: "bKash" },
+  { id: "BKASH", label: "bKash Personal" },
   { id: "NAGAD", label: "Nagad" },
+  { id: "ROCKET", label: "Rocket" },
 ] as const;
 
 type PayId = (typeof payments)[number]["id"];
@@ -17,7 +19,7 @@ type PayId = (typeof payments)[number]["id"];
 export function CheckoutPage() {
   const { user } = useAuth();
   const { settings } = useStore();
-  const { cart, refresh } = useCart();
+  const { cart, refresh, loading: cartLoading } = useCart();
   const [form, setForm] = useState({
     shippingFullName: "",
     shippingPhone: "",
@@ -42,15 +44,46 @@ export function CheckoutPage() {
   const [order, setOrder] = useState<OrderResult | null>(null);
   const [txn, setTxn] = useState("");
   const [paidNote, setPaidNote] = useState("");
+  const [savedAddress, setSavedAddress] = useState<SavedAddress | null>(null);
+  const [addressLoaded, setAddressLoaded] = useState(false);
 
   useEffect(() => {
     if (user) {
+      setAddressLoaded(false);
       setForm((current) => ({
         ...current,
         shippingFullName: current.shippingFullName || `${user.firstName} ${user.lastName}`.trim(),
         email: user.email,
         shippingPhone: current.shippingPhone || user.phone || "",
       }));
+
+      let active = true;
+      api.defaultAddress().then((address) => {
+        if (!active) return;
+        setSavedAddress(address);
+        setAddressLoaded(true);
+        if (!address) return;
+        setForm((current) => ({
+          ...current,
+          shippingFullName: address.fullName,
+          shippingPhone: address.phone,
+          shippingLine1: address.line1,
+          shippingLine2: address.line2 ?? "",
+          shippingCity: address.city,
+          shippingState: address.state ?? "",
+          shippingPostalCode: address.postalCode,
+          shippingCountry: address.country,
+          email: user.email,
+        }));
+      }).catch(() => {
+        if (!active) return;
+        setSavedAddress(null);
+        setAddressLoaded(true);
+      });
+
+      return () => {
+        active = false;
+      };
     }
   }, [user]);
 
@@ -102,9 +135,22 @@ export function CheckoutPage() {
 
   async function place(event: FormEvent) {
     event.preventDefault();
+    if (user && !addressLoaded) return;
     setError("");
     setBusy(true);
     try {
+      if (user) {
+        await api.saveDefaultAddress({
+          fullName: form.shippingFullName,
+          phone: form.shippingPhone,
+          line1: form.shippingLine1,
+          line2: form.shippingLine2 || null,
+          city: form.shippingCity,
+          state: form.shippingState || null,
+          postalCode: form.shippingPostalCode,
+          country: form.shippingCountry,
+        });
+      }
       await api.choosePayment(method);
       const placed = await api.placeOrder({
         shippingFullName: form.shippingFullName,
@@ -138,28 +184,48 @@ export function CheckoutPage() {
           ? { orderId: order.id, transactionId: txn }
           : { orderNumber: order.orderNumber, phone: form.shippingPhone, transactionId: txn },
       );
-      setPaidNote("Transaction id received. We will confirm the payment.");
+      setPaidNote("লেনদেনের আইডি জমা হয়েছে। Admin অনুমোদন দিলে paid receipt ইমেইলে পাঠানো হবে।");
     } catch (reason) {
-      setPaidNote(reason instanceof Error ? reason.message : "Could not submit the transaction id");
+      setPaidNote(reason instanceof Error ? reason.message : "লেনদেনের আইডি জমা হয়নি। আবার চেষ্টা করুন।");
+    }
+  }
+
+  async function copyPaymentValue(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setPaidNote(`${label} কপি হয়েছে`);
+    } catch {
+      setPaidNote(`${label} কপি হয়নি। নম্বরটি select করে copy করুন।`);
     }
   }
 
   const fee = shipping ?? 0;
   const total = Math.max(cart.summary.subtotal - discount, 0) + fee;
-  const wallet =
-    order?.payTo ||
-    (method === "BKASH" ? settings.bkashNumber : method === "NAGAD" ? settings.nagadNumber : null);
+  const selectedWallet = method === "BKASH" ? settings.bkashNumber : method === "NAGAD" ? settings.nagadNumber : method === "ROCKET" ? settings.rocketNumber : null;
+  const wallet = order?.payTo || selectedWallet;
 
   if (order) {
-    const payLabel = order.paymentMethod === "BKASH" ? "bKash" : order.paymentMethod === "NAGAD" ? "Nagad" : order.paymentMethod === "STRIPE" ? "Card" : "Cash on delivery";
+    const payLabel = order.paymentMethod === "BKASH" ? "bKash Personal" : order.paymentMethod === "NAGAD" ? "Nagad" : order.paymentMethod === "ROCKET" ? "Rocket" : order.paymentMethod === "STRIPE" ? "Card" : "Cash on delivery";
+    const manualPayment = order.paymentMethod === "BKASH" || order.paymentMethod === "NAGAD" || order.paymentMethod === "ROCKET";
+    const paymentPending = manualPayment && order.status !== "CONFIRMED";
     return (
       <div className="receipt-board">
-        <article className="receipt">
-          <p className="receipt-kicker">{settings.storeName}</p>
-          <h1>Receipt</h1>
-          <p className="receipt-number">{order.orderNumber}</p>
-          <p className="note">{titleCaseStatus(order.status)} · {payLabel}</p>
+        <article className="receipt receipt-modern">
+          <header className="receipt-header">
+            <div>
+              <p className="receipt-kicker">{settings.storeName}</p>
+              <h1>{paymentPending ? "Order placed" : "Order receipt"}</h1>
+            </div>
+            <span className={paymentPending ? "receipt-status pending" : "receipt-status paid"}>
+              {paymentPending ? "Payment pending" : titleCaseStatus(order.status)}
+            </span>
+          </header>
+          <div className="receipt-order-ref">
+            <span>Order reference</span>
+            <strong>{order.orderNumber}</strong>
+          </div>
           <div className="receipt-lines">
+            <p className="receipt-section-label">Items</p>
             {(order.items ?? []).map((item) => (
               <div className="sub" key={item.id}>
                 <span>
@@ -170,25 +236,28 @@ export function CheckoutPage() {
               </div>
             ))}
           </div>
-          <div className="sub"><span>Subtotal</span><span>{money(order.subtotal ?? order.total)}</span></div>
-          <div className="sub"><span>Delivery</span><span>{money(order.shippingAmount ?? 0)}</span></div>
-          <div className="sub"><span>Discount</span><span>{money(order.discountAmount ?? 0)}</span></div>
-          <div className="sub receipt-total"><strong>Total</strong><strong>{money(order.total)}</strong></div>
-          <p className="note">
-            {order.shippingFullName}<br />
-            {order.shippingLine1}{order.shippingCity ? `, ${order.shippingCity}` : ""} {order.shippingPostalCode}<br />
-            {order.shippingPhone}
+          <div className="receipt-totals">
+            <div className="sub"><span>Subtotal</span><span>{money(order.subtotal ?? order.total)}</span></div>
+            <div className="sub"><span>Delivery</span><span>{money(order.shippingAmount ?? 0)}</span></div>
+            <div className="sub"><span>Discount</span><span>{money(order.discountAmount ?? 0)}</span></div>
+            <div className="sub receipt-total"><strong>Total</strong><strong>{money(order.total)}</strong></div>
+          </div>
+          <div className="receipt-delivery">
+            <p className="receipt-section-label">Delivering to</p>
+            <strong>{order.shippingFullName}</strong>
+            <p>{order.shippingLine1}{order.shippingCity ? `, ${order.shippingCity}` : ""} {order.shippingPostalCode}</p>
+            <p>{order.shippingPhone}</p>
+          </div>
+          <p className="receipt-email-note">
+            {paymentPending
+              ? "Your paid receipt will be emailed after the payment is approved."
+              : order.emailed
+                ? "A copy of this receipt was sent to your email."
+                : "This order is saved here and in your account."}
           </p>
-          <p className="note">
-            {order.emailed ? "A copy of this receipt was sent to your email." : "The receipt email could not be sent. This page and your account both keep the order."}
-          </p>
-          <p className="note">
-            <Link to="/account/orders">See it in your orders</Link>
-            {" · "}
-            <Link to="/track">Track</Link>
-          </p>
+          <p className="receipt-links"><Link to="/account/orders">My orders</Link><Link to="/track">Track order</Link></p>
         </article>
-        <aside className="pay-card panel">
+        <aside className="pay-card panel receipt-payment">
           <p className="receipt-kicker">Payment</p>
           <h2>{payLabel}</h2>
           <p className="pay-amount">{money(order.total)}</p>
@@ -212,14 +281,33 @@ export function CheckoutPage() {
               Pay by card
             </button>
           ) : null}
-          {order.paymentMethod === "BKASH" || order.paymentMethod === "NAGAD" ? (
-            <form onSubmit={submitTxn}>
-              <p>Send {money(order.total)} to {wallet || "the store wallet"}, then enter the transaction id.</p>
-              <label className="field">
-                <span>Transaction id</span>
-                <input value={txn} onChange={(event) => setTxn(event.target.value)} required minLength={4} />
+          {manualPayment ? (
+            <form className="merchant-payment" onSubmit={submitTxn}>
+              <div className={`wallet-mark wallet-${order.paymentMethod.toLowerCase()}`} aria-hidden="true">
+                {order.paymentMethod === "BKASH" ? "bK" : order.paymentMethod === "NAGAD" ? "N" : "R"}
+              </div>
+              <p className="merchant-kicker">ওয়ালেট পেমেন্ট</p>
+              <h3>Pay with {payLabel}</h3>
+              <div className="merchant-amount">
+                <div><span>যে পরিমাণ পাঠাবেন</span><strong>{money(order.total)}</strong></div>
+                <button type="button" onClick={() => copyPaymentValue(String(order.total), "পরিমাণ")}>পরিমাণ কপি</button>
+              </div>
+              <div className="merchant-account">
+                <div><span>মার্চেন্ট অ্যাকাউন্ট নম্বর</span><strong>{wallet || "অ্যাকাউন্ট নম্বর সেট করা হয়নি"}</strong></div>
+                {wallet ? <button type="button" onClick={() => copyPaymentValue(wallet, "অ্যাকাউন্ট নম্বর")}>নম্বর কপি</button> : null}
+              </div>
+              <ol className="merchant-steps">
+                <li>{payLabel} app খুলে <strong>Send Money</strong> নির্বাচন করুন।</li>
+                <li>উপরের মার্চেন্ট নম্বরে দেখানো ঠিক পরিমাণ টাকা পাঠান।</li>
+                <li>SMS বা payment receipt-এ পাওয়া Transaction ID নিচের ঘরে লিখুন।</li>
+              </ol>
+              <label className="field merchant-transaction-field">
+                <span>নিচের ঘরে Transaction ID লিখুন</span>
+                <small className="merchant-transaction-hint">টাকা পাঠানোর পর SMS বা payment confirmation-এ যে ID পাবেন, সেটি লিখুন।</small>
+                <input className="merchant-transaction-input" value={txn} onChange={(event) => setTxn(event.target.value)} required minLength={4} aria-label="Transaction ID লিখুন" placeholder="SMS-এর Transaction ID" />
               </label>
-              <button className="btn wide" type="submit">Submit</button>
+              <button className="btn wide" type="submit" disabled={!wallet}>লেনদেন আইডি জমা দিন</button>
+              <p className="merchant-footnote">Admin payment approve করলে paid receipt ইমেইলে আসবে।</p>
             </form>
           ) : null}
           {paidNote ? <p className="note">{paidNote}</p> : null}
@@ -233,71 +321,101 @@ export function CheckoutPage() {
       <div>
         <h1 className="label">Checkout</h1>
         <div style={{ height: 16 }} />
-        <label className="field">
-          <span>Full name</span>
-          <input required value={form.shippingFullName} onChange={(event) => setForm({ ...form, shippingFullName: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>Phone</span>
-          <input required minLength={7} value={form.shippingPhone} onChange={(event) => setForm({ ...form, shippingPhone: event.target.value })} />
-        </label>
+        {user && !addressLoaded ? <RowsSkeleton rows={3} /> : null}
+        {user && addressLoaded && savedAddress ? (
+          <div className="saved-address">
+            <p className="label">Delivery address</p>
+            <p><strong>{savedAddress.fullName}</strong> · {savedAddress.phone}</p>
+            <p>{savedAddress.line1}{savedAddress.line2 ? `, ${savedAddress.line2}` : ""}</p>
+            <p>{savedAddress.city}{savedAddress.state ? `, ${savedAddress.state}` : ""} {savedAddress.postalCode}</p>
+            <p>{savedAddress.country}</p>
+            <p className="note"><Link to="/account">Change address in profile</Link></p>
+          </div>
+        ) : null}
         {user ? null : (
+          <>
+            <label className="field">
+              <span>Full name</span>
+              <input required value={form.shippingFullName} onChange={(event) => setForm({ ...form, shippingFullName: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>Phone</span>
+              <input required minLength={7} value={form.shippingPhone} onChange={(event) => setForm({ ...form, shippingPhone: event.target.value })} />
+            </label>
           <label className="field">
             <span>Email</span>
             <input required type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
           </label>
+          </>
         )}
-        <label className="field">
-          <span>Address</span>
-          <input required value={form.shippingLine1} onChange={(event) => setForm({ ...form, shippingLine1: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>Address line 2</span>
-          <input value={form.shippingLine2} onChange={(event) => setForm({ ...form, shippingLine2: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>City</span>
-          <input required minLength={2} value={form.shippingCity} onChange={(event) => setForm({ ...form, shippingCity: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>State</span>
-          <input value={form.shippingState} onChange={(event) => setForm({ ...form, shippingState: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>Postal code</span>
-          <input required value={form.shippingPostalCode} onChange={(event) => setForm({ ...form, shippingPostalCode: event.target.value })} />
-        </label>
-        <label className="field">
-          <span>Country</span>
-          <input required value={form.shippingCountry} onChange={(event) => setForm({ ...form, shippingCountry: event.target.value })} />
-        </label>
+        {(!user || (addressLoaded && !savedAddress)) ? (
+          <>
+            {user ? (
+              <>
+                <label className="field"><span>Full name</span><input required value={form.shippingFullName} onChange={(event) => setForm({ ...form, shippingFullName: event.target.value })} /></label>
+                <label className="field"><span>Phone</span><input required minLength={7} value={form.shippingPhone} onChange={(event) => setForm({ ...form, shippingPhone: event.target.value })} /></label>
+              </>
+            ) : null}
+            <label className="field">
+              <span>Address</span>
+              <input required value={form.shippingLine1} onChange={(event) => setForm({ ...form, shippingLine1: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>Address line 2</span>
+              <input value={form.shippingLine2} onChange={(event) => setForm({ ...form, shippingLine2: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>City</span>
+              <input required minLength={2} value={form.shippingCity} onChange={(event) => setForm({ ...form, shippingCity: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>State</span>
+              <input value={form.shippingState} onChange={(event) => setForm({ ...form, shippingState: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>Postal code</span>
+              <input required value={form.shippingPostalCode} onChange={(event) => setForm({ ...form, shippingPostalCode: event.target.value })} />
+            </label>
+            <label className="field">
+              <span>Country</span>
+              <input required value={form.shippingCountry} onChange={(event) => setForm({ ...form, shippingCountry: event.target.value })} />
+            </label>
+          </>
+        ) : null}
         <label className="field">
           <span>Note</span>
           <textarea value={form.customerNote} onChange={(event) => setForm({ ...form, customerNote: event.target.value })} />
         </label>
         <p className="option-label">Pay with</p>
         <div className="pay-grid">
-          {payments.map((option) => (
-            <label key={option.id} className={method === option.id ? "pay-card on" : "pay-card"}>
-              <input type="radio" name="pay" checked={method === option.id} onChange={() => setMethod(option.id)} />
-              <strong>{option.label}</strong>
-              <span>
-                {option.id === "BKASH" && settings.bkashNumber ? settings.bkashNumber : ""}
-                {option.id === "NAGAD" && settings.nagadNumber ? settings.nagadNumber : ""}
-                {option.id === "COD" ? "Pay at the door" : ""}
-                {option.id === "STRIPE" ? "Visa, Mastercard" : ""}
-              </span>
-            </label>
-          ))}
+          {payments.map((option) => {
+            const walletNumber = option.id === "BKASH" ? settings.bkashNumber : option.id === "NAGAD" ? settings.nagadNumber : option.id === "ROCKET" ? settings.rocketNumber : null;
+            const configured = option.id === "COD" || option.id === "STRIPE" || Boolean(walletNumber);
+            return (
+              <label key={option.id} className={`pay-card${method === option.id ? " on" : ""}${configured ? "" : " disabled"}`}>
+                <input type="radio" name="pay" checked={method === option.id} disabled={!configured} onChange={() => setMethod(option.id)} />
+                <strong>{option.label}</strong>
+                <span className="pay-card-meta">
+                  {!configured ? "Unavailable · account not configured" : null}
+                  {option.id === "BKASH" && walletNumber ? `Personal · ${walletNumber}` : null}
+                  {option.id === "NAGAD" && walletNumber ? walletNumber : null}
+                  {option.id === "ROCKET" && walletNumber ? walletNumber : null}
+                  {option.id === "COD" ? "Pay at the door" : null}
+                  {option.id === "STRIPE" ? "Credit or debit · Visa, Mastercard" : null}
+                </span>
+              </label>
+            );
+          })}
         </div>
         {error ? <p className="error">{error}</p> : null}
-        <button className="btn wide" type="submit" disabled={busy || cart.items.length === 0}>
+        <button className="btn wide" type="submit" disabled={busy || cartLoading || cart.items.length === 0 || (Boolean(user) && !addressLoaded)}>
           Place order
         </button>
       </div>
       <aside className="summary-box">
         <h2 className="label">Summary</h2>
-        {cart.items.map((line) => (
+        {cartLoading ? <RowsSkeleton rows={3} /> : null}
+        {!cartLoading && cart.items.map((line) => (
           <div className="sub" key={line.id}>
             <span>
               {line.variant.product.name} × {line.quantity}

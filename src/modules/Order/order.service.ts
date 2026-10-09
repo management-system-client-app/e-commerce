@@ -111,22 +111,19 @@ const placeOrder = async (buyer: OrderBuyer, input: PlaceOrderInput) => {
     }
 
     if (!cart.paymentMethod) {
-      throw AppError.badRequest("Choose COD, STRIPE, BKASH, or NAGAD before placing the order");
+      throw AppError.badRequest("Choose a payment method before placing the order");
     }
 
     const paymentMethod = cart.paymentMethod;
-    const manualProvider = paymentMethod === "BKASH" || paymentMethod === "NAGAD" ? paymentMethod : null;
+    const manualProvider = paymentMethod === "BKASH" || paymentMethod === "NAGAD" || paymentMethod === "ROCKET" ? paymentMethod : null;
 
     if (manualProvider) {
       const settings = await settingsService.getSettings();
-      const walletNumber = manualProvider === "BKASH" ? settings.bkashNumber : settings.nagadNumber;
+      const walletNumber = manualProvider === "BKASH" ? settings.bkashNumber : manualProvider === "NAGAD" ? settings.nagadNumber : settings.rocketNumber;
 
       if (!walletNumber) {
-        throw AppError.badRequest(
-          manualProvider === "BKASH"
-            ? "bKash number is not configured"
-            : "Nagad number is not configured",
-        );
+        const walletLabel = manualProvider === "BKASH" ? "bKash Personal" : manualProvider === "NAGAD" ? "Nagad" : "Rocket";
+        throw AppError.badRequest(`${walletLabel} number is not configured`);
       }
     }
 
@@ -302,7 +299,7 @@ const placeOrder = async (buyer: OrderBuyer, input: PlaceOrderInput) => {
                     status: "PENDING" as const,
                     amount: total,
                     currency: "USD",
-                    method: manualProvider === "BKASH" ? "bkash" : "nagad",
+                    method: manualProvider.toLowerCase(),
                   },
                 },
               }
@@ -359,18 +356,20 @@ const placeOrder = async (buyer: OrderBuyer, input: PlaceOrderInput) => {
   const total = Number(placed.order.total);
 
   let payTo: string | null = null;
-  if (placed.paymentMethod === "BKASH" || placed.paymentMethod === "NAGAD") {
+  if (placed.paymentMethod === "BKASH" || placed.paymentMethod === "NAGAD" || placed.paymentMethod === "ROCKET") {
     const settings = await settingsService.getSettings();
-    payTo = placed.paymentMethod === "BKASH" ? settings.bkashNumber : settings.nagadNumber;
+    payTo = placed.paymentMethod === "BKASH" ? settings.bkashNumber : placed.paymentMethod === "NAGAD" ? settings.nagadNumber : settings.rocketNumber;
   }
 
+  const manualWallet = placed.paymentMethod === "BKASH" ? "bKash Personal" : placed.paymentMethod === "NAGAD" ? "Nagad" : placed.paymentMethod === "ROCKET" ? "Rocket" : null;
   const paymentNote = payTo
-    ? `Send the total to ${placed.paymentMethod === "BKASH" ? "bKash" : "Nagad"} ${payTo}, then submit the transaction id in your account.`
+    ? `Send the total to ${manualWallet} ${payTo}, then submit the transaction id for approval.`
     : placed.paymentMethod === "COD"
       ? "Pay cash when the order arrives."
       : "Open the store receipt and pay by card to confirm the order.";
 
-  const emailed = customerEmail
+  const manualPaymentPending = placed.paymentMethod === "BKASH" || placed.paymentMethod === "NAGAD" || placed.paymentMethod === "ROCKET";
+  const emailed = customerEmail && !manualPaymentPending
     ? await sendOrderMail(() =>
         sendOrderConfirmationEmail({
           to: customerEmail,

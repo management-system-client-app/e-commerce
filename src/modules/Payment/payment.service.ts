@@ -4,6 +4,12 @@ import { Prisma } from "../../../generated/prisma/client";
 import { env } from "../../app/config/env";
 import { prisma } from "../../app/config/prisma";
 import { sendOrderConfirmationEmail, sendPaymentRejectedEmail } from "../../utils/emailSender";
+
+type ManualPaymentProvider = "BKASH" | "NAGAD" | "ROCKET";
+const manualPaymentProviders: ManualPaymentProvider[] = ["BKASH", "NAGAD", "ROCKET"];
+
+const isManualPaymentProvider = (provider: string): provider is ManualPaymentProvider =>
+  manualPaymentProviders.includes(provider as ManualPaymentProvider);
 import { sendOrderMail } from "../../utils/orderMail";
 import { AppError } from "../../app/errors/AppError";
 import { NotFoundError } from "../../app/errors/NotFoundError";
@@ -622,11 +628,11 @@ const submitManualPayment = async (buyer: ManualBuyer, transactionId: string) =>
       buyer.kind === "user"
         ? {
             orderId: buyer.orderId,
-            provider: { in: ["BKASH", "NAGAD"] },
+            provider: { in: manualPaymentProviders },
             order: { userId: buyer.userId, status: "PENDING" },
           }
         : {
-            provider: { in: ["BKASH", "NAGAD"] },
+            provider: { in: manualPaymentProviders },
             order: {
               orderNumber: { equals: buyer.orderNumber, mode: "insensitive" },
               userId: null,
@@ -674,7 +680,7 @@ const submitManualPayment = async (buyer: ManualBuyer, transactionId: string) =>
       id: { not: payment.id },
       OR: [
         { transactionId },
-        { provider: { in: ["BKASH", "NAGAD"] }, status: "FAILED" },
+        { provider: { in: manualPaymentProviders }, status: "FAILED" },
       ],
     },
     select: { transactionId: true, metadata: true },
@@ -722,7 +728,7 @@ const submitManualPayment = async (buyer: ManualBuyer, transactionId: string) =>
 const listManualPayments = async () => {
   return prisma.payment.findMany({
     where: {
-      provider: { in: ["BKASH", "NAGAD"] },
+      provider: { in: manualPaymentProviders },
       status: "PROCESSING",
     },
     orderBy: { updatedAt: "asc" },
@@ -764,12 +770,13 @@ const approveManualPayment = async (paymentId: string) => {
           guestEmail: true,
           shippingFullName: true,
           user: { select: { firstName: true, lastName: true, email: true } },
+          items: { select: { productName: true, quantity: true, lineTotal: true } },
         },
       },
     },
   });
 
-  if (!payment || (payment.provider !== "BKASH" && payment.provider !== "NAGAD")) {
+  if (!payment || !isManualPaymentProvider(payment.provider)) {
     throw new NotFoundError("Manual payment not found");
   }
 
@@ -800,6 +807,7 @@ const approveManualPayment = async (paymentId: string) => {
   const approvedMail = customerMail(payment.order);
 
   if (approvedMail) {
+    const providerLabel = payment.provider === "BKASH" ? "bKash Personal" : payment.provider === "NAGAD" ? "Nagad" : "Rocket";
     await sendOrderMail(() =>
       sendOrderConfirmationEmail({
         to: approvedMail.email,
@@ -807,6 +815,12 @@ const approveManualPayment = async (paymentId: string) => {
         orderNumber: payment.order.orderNumber,
         total: Number(payment.order.total),
         currency: payment.order.currency,
+        paymentNote: `${providerLabel} payment approved. Transaction reference: ${payment.transactionId}.`,
+        items: payment.order.items.map((item) => ({
+          name: item.productName,
+          quantity: item.quantity,
+          lineTotal: Number(item.lineTotal),
+        })),
       }),
     );
   }
@@ -830,7 +844,7 @@ const rejectManualPayment = async (paymentId: string, reason: string) => {
     },
   });
 
-  if (!payment || (payment.provider !== "BKASH" && payment.provider !== "NAGAD")) {
+  if (!payment || !isManualPaymentProvider(payment.provider)) {
     throw new NotFoundError("Manual payment not found");
   }
 

@@ -28,12 +28,27 @@ import type {
   Subscriber,
   StoreReturn,
   ManualPayment,
+  SavedAddress,
   VariantRow,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/v1";
 const TOKEN_KEY = "store_token";
 const SESSION_KEY = "cart_session";
+
+const getCache = new Map<string, Envelope<unknown>>();
+const pendingGets = new Map<string, Promise<Envelope<unknown>>>();
+let cacheVersion = 0;
+
+function clearApiCache() {
+  cacheVersion += 1;
+  getCache.clear();
+  pendingGets.clear();
+}
+
+function shouldCacheGet(path: string) {
+  return !/^\/(cart|me|orders|wishlist|returns|dashboard|users|track|payments|admin)(\/|\?|$)/i.test(path);
+}
 
 export class ApiError extends Error {
   status: number;
@@ -57,6 +72,7 @@ type Envelope<T> = {
 export const sessionStore = {
   token: () => localStorage.getItem(TOKEN_KEY),
   setToken: (token: string | null) => {
+    if (localStorage.getItem(TOKEN_KEY) !== token) clearApiCache();
     if (token) localStorage.setItem(TOKEN_KEY, token);
     else localStorage.removeItem(TOKEN_KEY);
   },
@@ -67,7 +83,7 @@ export const sessionStore = {
   },
 };
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<Envelope<T>> {
+async function performRequest<T>(path: string, init: RequestInit): Promise<Envelope<T>> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -89,6 +105,40 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<Envelop
     throw new ApiError(body?.message || "Request failed", response.status, body?.errors);
   }
   return body;
+}
+
+function request<T>(path: string, init: RequestInit = {}): Promise<Envelope<T>> {
+  const method = (init.method ?? "GET").toUpperCase();
+  const cacheable = method === "GET" && shouldCacheGet(path);
+  const key = `${sessionStore.token() ?? "guest"}:${path}`;
+
+  if (cacheable) {
+    const cached = getCache.get(key);
+    if (cached) return Promise.resolve(cached as Envelope<T>);
+    const pending = pendingGets.get(key);
+    if (pending) return pending as Promise<Envelope<T>>;
+  }
+
+  const version = cacheVersion;
+  const requestPromise = performRequest<T>(path, init).then((result) => {
+    if (method !== "GET") {
+      clearApiCache();
+    } else if (cacheable && version === cacheVersion) {
+      getCache.set(key, result as Envelope<unknown>);
+    }
+    return result;
+  });
+
+  if (cacheable) {
+    const pending = requestPromise as Promise<Envelope<unknown>>;
+    pendingGets.set(key, pending);
+    const clearPending = () => {
+      if (pendingGets.get(key) === pending) pendingGets.delete(key);
+    };
+    void pending.then(clearPending, clearPending);
+  }
+
+  return requestPromise;
 }
 
 function qs(params: Record<string, string | number | boolean | undefined | null>): string {
@@ -175,11 +225,21 @@ export const api = {
     for (const image of images) body.append("images", image);
     return request<ProductDetail>("/products", { method: "POST", body }).then((res) => res.data);
   },
-  updateProduct: (id: string, input: Record<string, unknown>) =>
-    request<ProductDetail>(`/products/${id}`, {
+  updateProduct: (id: string, input: Record<string, unknown>, images: File[] = []) => {
+    const body: BodyInit =
+      images.length > 0
+        ? (() => {
+            const form = new FormData();
+            form.append("data", JSON.stringify(input));
+            for (const image of images) form.append("images", image);
+            return form;
+          })()
+        : JSON.stringify(input);
+    return request<ProductDetail>(`/products/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(input),
-    }).then((res) => res.data),
+      body,
+    }).then((res) => res.data);
+  },
   colors: async (): Promise<Color[]> => {
     const found = new Map<string, Color>();
     let page = 1;
@@ -323,6 +383,9 @@ export const api = {
       ...res.data,
       phone: res.data.phone ?? null,
     })),
+  defaultAddress: () => request<SavedAddress | null>("/users/me/address").then((res) => res.data),
+  saveDefaultAddress: (body: Omit<SavedAddress, "id" | "isDefault" | "label"> & { label?: string }) =>
+    request<SavedAddress>("/users/me/address", { method: "PUT", body: JSON.stringify(body) }).then((res) => res.data),
   logout: () => request<unknown>("/auth/logout", { method: "POST" }).then((res) => res.data),
   wishlist: () =>
     request<
@@ -394,6 +457,7 @@ export const api = {
       body: JSON.stringify(body),
     }).then((res) => res.data),
   outlet: (id: string) => request<Outlet>(`/outlets/${id}`).then((res) => res.data),
+  adminOutlets: () => request<Outlet[]>("/outlets/manage").then((res) => res.data),
   deleteOutlet: (id: string) => request<unknown>(`/outlets/${id}`, { method: "DELETE" }).then((res) => res.data),
   managePages: () => request<CmsPage[]>("/pages/manage").then((res) => res.data),
   savePage: (slug: string, body: { title: string; body: string; isActive?: boolean }) =>
@@ -401,6 +465,7 @@ export const api = {
   deletePage: (slug: string) =>
     request<unknown>(`/pages/${encodeURIComponent(slug)}`, { method: "DELETE" }).then((res) => res.data),
   zones: () => request<DeliveryZone[]>("/delivery-zones").then((res) => res.data),
+  adminZones: () => request<DeliveryZone[]>("/delivery-zones/manage").then((res) => res.data),
   zone: (id: string) => request<DeliveryZone>(`/delivery-zones/${id}`).then((res) => res.data),
   saveZone: (body: Record<string, unknown>, id?: string) =>
     request<DeliveryZone>(id ? `/delivery-zones/${id}` : "/delivery-zones", {
@@ -440,7 +505,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ orderId }),
     }).then((res) => res.data),
-  adminSizeGuides: () => request<SizeGuide[]>("/size-guides").then((res) => res.data),
+  adminSizeGuides: () => request<SizeGuide[]>("/size-guides/manage").then((res) => res.data),
   sizeGuide: (id: string) => request<SizeGuide>(`/size-guides/${id}`).then((res) => res.data),
   saveSizeGuide: (body: Record<string, unknown>, id?: string) =>
     request<SizeGuide>(id ? `/size-guides/${id}` : "/size-guides", {

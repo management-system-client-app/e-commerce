@@ -17,7 +17,9 @@ const createProduct = async (
   const uploaded =
     files.length === 0
       ? []
-      : await Promise.all(files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products")));
+      : await Promise.all(
+          files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products", file.mimetype, file.originalname)),
+        );
 
   try {
     const product = await productService.createProduct(
@@ -95,7 +97,25 @@ const updateProduct = async (
   res: Response,
 ): Promise<void> => {
   const { id } = req.validatedParams;
-  const product = await productService.updateProduct(id, req.validatedBody);
+  const files = Array.isArray(req.files) ? req.files : [];
+  const uploaded =
+    files.length === 0
+      ? []
+      : await Promise.all(
+          files.map((file) => uploadImageBuffer(file.buffer, "ecommerce/products", file.mimetype, file.originalname)),
+        );
+
+  let product;
+  try {
+    product = await productService.updateProduct(
+      id,
+      req.validatedBody,
+      uploaded.map((image) => ({ url: image.url, alt: req.validatedBody.name ?? "" })),
+    );
+  } catch (error) {
+    await deleteCloudinaryImages(uploaded.map((image) => image.publicId));
+    throw error;
+  }
 
   res.status(200).json({
     success: true,

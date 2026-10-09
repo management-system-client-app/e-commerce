@@ -130,6 +130,7 @@ export function useAuth() {
 
 type CartValue = {
   cart: Cart;
+  loading: boolean;
   busy: boolean;
   drawer: boolean;
   setDrawer: (open: boolean) => void;
@@ -157,12 +158,18 @@ function keepSession(cart: Cart) {
 export function CartProvider({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth();
   const [cart, setCart] = useState<Cart>(emptyCart);
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [drawer, setDrawer] = useState(false);
 
   const refresh = useCallback(async () => {
-    const next = keepSession(await api.cart());
-    setCart(next);
+    setLoading(true);
+    try {
+      const next = keepSession(await api.cart());
+      setCart(next);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -213,8 +220,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ cart, busy, drawer, setDrawer, refresh, add, remove, setQuantity }),
-    [cart, busy, drawer, refresh, add, remove, setQuantity],
+    () => ({ cart, loading, busy, drawer, setDrawer, refresh, add, remove, setQuantity }),
+    [cart, loading, busy, drawer, refresh, add, remove, setQuantity],
   );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
@@ -228,7 +235,9 @@ export function useCart() {
 
 type StoreValue = {
   settings: Settings;
+  settingsReady: boolean;
   catalog: Catalog;
+  catalogReady: boolean;
   categoryImages: Map<string, string | null>;
   promo: string;
 };
@@ -244,16 +253,19 @@ const fallbackSettings: Settings = {
   instagramUrl: null,
   bkashNumber: null,
   nagadNumber: null,
+  rocketNumber: null,
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(fallbackSettings);
+  const [settingsReady, setSettingsReady] = useState(false);
   const [catalog, setCatalog] = useState<Catalog>({
     brands: [],
     categories: [],
     sizes: [],
     fabrics: [],
   });
+  const [catalogReady, setCatalogReady] = useState(false);
   const [categoryImages, setCategoryImages] = useState<Map<string, string | null>>(new Map());
   const [promo, setPromo] = useState("New arrivals are in");
 
@@ -261,8 +273,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     api.settings().then((next) => {
       setSettings(next);
       document.title = next.storeName;
-    }).catch(() => undefined);
-    api.catalog().then(setCatalog).catch(() => undefined);
+    }).catch(() => undefined).finally(() => setSettingsReady(true));
+    api.catalog().then(setCatalog).catch(() => undefined).finally(() => setCatalogReady(true));
     api
       .categories()
       .then((items) => {
@@ -279,8 +291,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ settings, catalog, categoryImages, promo }),
-    [settings, catalog, categoryImages, promo],
+    () => ({ settings, settingsReady, catalog, catalogReady, categoryImages, promo }),
+    [settings, settingsReady, catalog, catalogReady, categoryImages, promo],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

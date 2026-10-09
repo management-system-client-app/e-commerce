@@ -14,6 +14,7 @@ export type Settings = {
   instagramUrl: string | null;
   bkashNumber: string | null;
   nagadNumber: string | null;
+  rocketNumber: string | null;
 };
 
 export type Category = {
@@ -29,15 +30,17 @@ export type Category = {
 
 export type AdminHomeBlock = {
   id: string;
-  kind: "BANNER" | "CAMPAIGN" | "NEW_ARRIVAL";
+  kind: "BANNER" | "CAMPAIGN" | "NEW_ARRIVAL" | "TRENDING";
   title: string;
   subtitle: string | null;
   imageUrl: string | null;
+  productIds: string[];
   linkUrl: string | null;
   categoryId: string | null;
   sortOrder: number;
   isActive: boolean;
   category?: { id: string; name: string; slug: string } | null;
+  products?: ProductCardData[];
 };
 
 export type Brand = { id: string; name: string; slug: string };
@@ -107,7 +110,7 @@ export type ProductDetail = Omit<ProductCardData, "variants"> & {
 
 export type HomeBlock = {
   id: string;
-  kind: "BANNER" | "CAMPAIGN" | "NEW_ARRIVAL";
+  kind: "BANNER" | "CAMPAIGN" | "NEW_ARRIVAL" | "TRENDING";
   title: string;
   subtitle: string | null;
   imageUrl: string | null;
@@ -121,6 +124,7 @@ export type HomePayload = {
   banners: HomeBlock[];
   campaigns: HomeBlock[];
   newArrivals: HomeBlock[];
+  trendingProducts: ProductCardData[];
 };
 
 export type CartLine = {
@@ -144,7 +148,7 @@ export type CartLine = {
 export type Cart = {
   id: string | null;
   sessionId: string | null;
-  paymentMethod: "COD" | "STRIPE" | "BKASH" | "NAGAD" | null;
+  paymentMethod: "COD" | "STRIPE" | "BKASH" | "NAGAD" | "ROCKET" | null;
   items: CartLine[];
   summary: { itemCount: number; subtotal: number };
 };
@@ -157,6 +161,20 @@ export type User = {
   phone: string | null;
   avatarUrl?: string | null;
   accountType?: "USER" | "ADMIN";
+};
+
+export type SavedAddress = {
+  id: string;
+  label: string | null;
+  fullName: string;
+  phone: string;
+  line1: string;
+  line2: string | null;
+  city: string;
+  state: string | null;
+  postalCode: string;
+  country: string;
+  isDefault: boolean;
 };
 
 export type DashboardOverview = {

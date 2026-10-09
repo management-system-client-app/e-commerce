@@ -13,6 +13,7 @@ export const updateSettingsSchema = z
     instagramUrl: z.url().nullable().optional(),
     bkashNumber: z.string().trim().min(7).max(20).nullable().optional(),
     nagadNumber: z.string().trim().min(7).max(20).nullable().optional(),
+    rocketNumber: z.string().trim().min(7).max(20).nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, {

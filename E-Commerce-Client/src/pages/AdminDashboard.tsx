@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { UserFace } from "../components/Chrome";
+import { DetailSkeleton, RowsSkeleton, SkeletonBlock } from "../components/Skeleton";
 import { money, titleCaseStatus } from "../format";
 import { useAuth, useStore } from "../state";
 import type { AdminOrder, DashboardOverview, PageMeta, ProductCardData, StoreReturn } from "../types";
@@ -105,9 +106,18 @@ export function AdminLayout() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const stored = localStorage.getItem("store_theme");
+    if (stored === "light" || stored === "dark") return stored;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("store_theme", theme);
+  }, [theme]);
 
   if (!ready) {
-    return <div className="grid min-h-screen place-items-center bg-[#d7f3ea] text-sm text-slate-500">Loading…</div>;
+    return <div className={`admin-theme-root grid min-h-screen place-items-center p-6 ${theme === "dark" ? "admin-theme-dark" : "admin-theme-light"}`}><div className="w-full max-w-xl"><RowsSkeleton rows={7} columns={2} /></div></div>;
   }
   if (!user) return <Navigate to="/login" replace />;
   if (user.accountType !== "ADMIN") return <Navigate to="/" replace />;
@@ -116,9 +126,9 @@ export function AdminLayout() {
   const today = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(145deg,#e7fbf4_0%,#b7ebdc_42%,#7ed4c0_100%)] p-2 text-slate-800 antialiased sm:p-4">
-      <div className="relative flex min-h-[calc(100vh-1rem)] overflow-hidden rounded-[28px] bg-[#f4f6f8] shadow-[0_20px_50px_rgba(16,24,40,0.08)] sm:min-h-[calc(100vh-2rem)]">
-        <aside className={`absolute inset-y-0 left-0 z-40 flex w-[232px] flex-col bg-[#f7f8fa] transition-transform lg:static lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
+    <div className={`admin-theme-root min-h-screen p-2 antialiased sm:p-4 ${theme === "dark" ? "admin-theme-dark" : "admin-theme-light"}`}>
+      <div className="admin-theme-panel relative flex min-h-[calc(100vh-1rem)] overflow-hidden rounded-[28px] shadow-[0_20px_50px_rgba(16,24,40,0.08)] sm:min-h-[calc(100vh-2rem)]">
+        <aside className={`admin-theme-sidebar absolute inset-y-0 left-0 z-40 flex w-[232px] flex-col transition-transform lg:static lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}>
           <div className="flex items-center gap-3 px-5 pt-6 pb-5">
             <span className="grid h-10 w-10 place-items-center rounded-full bg-[#2ec9a8] text-lg font-semibold text-white">
               {settings.storeName.slice(0, 1)}
@@ -156,7 +166,7 @@ export function AdminLayout() {
         </aside>
         {open ? <button type="button" className="absolute inset-0 z-30 bg-slate-900/30 lg:hidden" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center gap-3 px-4 pt-5 pb-2 sm:px-6">
+          <header className="admin-theme-topbar flex items-center gap-3 px-4 pt-5 pb-2 sm:px-6">
             <button type="button" className="grid h-10 w-10 place-items-center rounded-xl bg-white text-slate-600 shadow-sm lg:hidden" aria-label="Menu" onClick={() => setOpen(true)}>
               <Icon d="M4 7h16M4 12h16M4 17h16" />
             </button>
@@ -181,6 +191,9 @@ export function AdminLayout() {
               </button>
             </form>
             <div className="ml-auto flex items-center gap-2">
+              <button type="button" aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"} className="admin-theme-toggle grid h-10 w-10 place-items-center rounded-xl shadow-sm" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>
+                <Icon d={theme === "dark" ? "M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" : "M20.4 15.4A8.5 8.5 0 0 1 8.6 3.6 8.6 8.6 0 1 0 20.4 15.4Z"} />
+              </button>
               <span className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
                 <UserFace user={user} size={28} />
                 <span className="hidden sm:inline">{user.firstName}</span>
@@ -317,18 +330,22 @@ export function AdminOverview() {
   const [returns, setReturns] = useState<StoreReturn[]>([]);
   const [returnNote, setReturnNote] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  function load() {
-    api.dashboard().then(setOverview).catch((reason) => {
-      setError(reason instanceof ApiError ? reason.message : "Could not load the dashboard");
-    });
-    api.adminOrders({ page: 1, limit: 100 }).then((result) => setOrders(result.items)).catch(() => setOrders([]));
-    api.promotions().then((items) => setOffers(items as Offer[])).catch(() => setOffers([]));
-    api.returns().then(setReturns).catch(() => setReturns([]));
+  function load(showLoading = false) {
+    if (showLoading) setLoading(true);
+    Promise.all([
+      api.dashboard().then(setOverview).catch((reason) => {
+        setError(reason instanceof ApiError ? reason.message : "Could not load the dashboard");
+      }),
+      api.adminOrders({ page: 1, limit: 100 }).then((result) => setOrders(result.items)).catch(() => setOrders([])),
+      api.promotions().then((items) => setOffers(items as Offer[])).catch(() => setOffers([])),
+      api.returns().then(setReturns).catch(() => setReturns([])),
+    ]).finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    load();
+    load(true);
     function onShow() {
       if (document.visibilityState === "visible") load();
     }
@@ -362,6 +379,8 @@ export function AdminOverview() {
   const top = [...sold.entries()].sort((left, right) => right[1] - left[1]).slice(0, 4);
   const swatches = ["bg-[#e7f8f3]", "bg-[#eef2f6]", "bg-[#f8f1ea]", "bg-[#eef3fb]"];
 
+  if (loading) return <RowsSkeleton rows={8} columns={2} />;
+
   return (
     <div className="space-y-4">
       {error ? <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
@@ -393,8 +412,8 @@ export function AdminOverview() {
               </div>
               {item.status === "REQUESTED" ? (
                 <div className="flex gap-2">
-                  <button type="button" className="rounded-lg bg-[#2ec9a8] px-3 py-1.5 text-xs font-semibold text-white" onClick={() => api.reviewReturn(item.id, { decision: "APPROVED", ...(returnNote ? { adminNote: returnNote } : {}) }).then(load)}>Approve</button>
-                  <button type="button" className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700" onClick={() => api.reviewReturn(item.id, { decision: "REJECTED", ...(returnNote ? { adminNote: returnNote } : {}) }).then(load)}>Reject</button>
+                  <button type="button" className="rounded-lg bg-[#2ec9a8] px-3 py-1.5 text-xs font-semibold text-white" onClick={() => api.reviewReturn(item.id, { decision: "APPROVED", ...(returnNote ? { adminNote: returnNote } : {}) }).then(() => load())}>Approve</button>
+                  <button type="button" className="rounded-lg bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700" onClick={() => api.reviewReturn(item.id, { decision: "REJECTED", ...(returnNote ? { adminNote: returnNote } : {}) }).then(() => load())}>Reject</button>
                 </div>
               ) : null}
             </li>
@@ -553,8 +572,10 @@ export function AdminOrders() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     api
       .adminOrders({ page, limit: 12, status: status || undefined })
       .then((result) => {
@@ -562,14 +583,15 @@ export function AdminOrders() {
         setMeta(result.meta);
         setError("");
       })
-      .catch((reason) => setError(reason instanceof ApiError ? reason.message : "Could not load orders"));
+      .catch((reason) => setError(reason instanceof ApiError ? reason.message : "Could not load orders"))
+      .finally(() => setLoading(false));
   }, [page, status]);
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-slate-500">{meta ? `${meta.total} orders` : "Loading…"}</p>
+          <p className="text-sm text-slate-500">{meta ? `${meta.total} orders` : loading ? <SkeletonBlock className="h-4 w-24" /> : ""}</p>
         </div>
         <label className="text-sm text-slate-600">
           Status
@@ -590,7 +612,7 @@ export function AdminOrders() {
       </div>
       {error ? <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <OrderTable orders={orders} />
+        {loading ? <RowsSkeleton rows={6} columns={5} /> : <OrderTable orders={orders} />}
       </section>
       {meta && meta.totalPages > 1 ? (
         <div className="flex items-center justify-end gap-2">
@@ -647,7 +669,7 @@ export function AdminOrderDetail() {
   }
 
   if (error && !order) return <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p>;
-  if (!order) return <p className="text-sm text-slate-500">Loading…</p>;
+  if (!order) return <DetailSkeleton />;
 
   return (
     <div className="space-y-5">
@@ -775,19 +797,22 @@ export function AdminProducts() {
   const [items, setItems] = useState<AdminProduct[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setPage(1);
   }, [search]);
 
   useEffect(() => {
+    setLoading(true);
     api
       .products({ page, limit: 12, sort: "latest", search: search || undefined })
       .then((result) => {
         setItems(result.items as AdminProduct[]);
         setMeta(result.meta);
       })
-      .catch((reason) => setError(reason instanceof ApiError ? reason.message : "Could not load products"));
+      .catch((reason) => setError(reason instanceof ApiError ? reason.message : "Could not load products"))
+      .finally(() => setLoading(false));
   }, [page, search]);
 
   return (
@@ -795,7 +820,7 @@ export function AdminProducts() {
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Catalog</h1>
-          <p className="mt-1 text-sm text-slate-500">{search ? `Results for “${search}”` : meta ? `${meta.total} products` : "Loading…"}</p>
+          <p className="mt-1 text-sm text-slate-500">{search ? `Results for “${search}”` : meta ? `${meta.total} products` : loading ? <SkeletonBlock className="h-4 w-24" /> : ""}</p>
         </div>
         <Link to="/admin/products/new" className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">
           Add product
@@ -816,7 +841,9 @@ export function AdminProducts() {
               </tr>
             </thead>
             <tbody>
-              {items.map((product) => {
+              {loading ? (
+                <tr><td colSpan={6} className="p-5"><RowsSkeleton rows={6} columns={6} /></td></tr>
+              ) : items.map((product) => {
                 const stock = (product.variants ?? []).reduce((sum, variant) => sum + variant.stock, 0);
                 return (
                   <tr key={product.id} className="border-t border-slate-100">
@@ -857,7 +884,7 @@ export function AdminProducts() {
             </tbody>
           </table>
         </div>
-        {items.length === 0 && !error ? <p className="px-5 py-8 text-sm text-slate-500">No products yet.</p> : null}
+        {!loading && items.length === 0 && !error ? <p className="px-5 py-8 text-sm text-slate-500">No products yet.</p> : null}
       </section>
       {meta && meta.totalPages > 1 ? (
         <div className="flex items-center justify-end gap-2">

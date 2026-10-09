@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState, type ReactNode } from "react";
 import { ApiError, api } from "../api";
+import { RowsSkeleton } from "../components/Skeleton";
 import { titleCaseStatus } from "../format";
 import { useAuth, useStore } from "../state";
 import type { Catalog, Category, CmsPage, Coupon, DeliveryZone, ManualPayment, Outlet, Promotion, Settings, SizeGuide, StoreReturn, Subscriber, VariantRow } from "../types";
@@ -36,9 +37,11 @@ export function AdminCoupons() {
   const [value, setValue] = useState("10");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   function load() {
-    api.coupons().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load coupons")));
+    setLoading(true);
+    api.coupons().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load coupons"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
@@ -76,6 +79,7 @@ export function AdminCoupons() {
         <button disabled={busy} className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">{busy ? "Saving…" : "Save"}</button>
       </form>
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: `${item.code} · ${item.type} ${item.value}` }))}
         onEdit={async (id) => {
           const item = await api.coupon(id);
@@ -99,9 +103,11 @@ export function AdminPromotions() {
   const [value, setValue] = useState("10");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   function load() {
-    api.adminPromotions().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load promotions")));
+    setLoading(true);
+    api.adminPromotions().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load promotions"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
@@ -133,6 +139,7 @@ export function AdminPromotions() {
         <button disabled={busy} className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">{busy ? "Saving…" : "Add"}</button>
       </form>
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: item.name }))}
         onDelete={async (id) => {
           await api.deletePromotion(id);
@@ -156,19 +163,22 @@ export function AdminCatalogExtras() {
   const [fabric, setFabric] = useState("");
   const [composition, setComposition] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   function load() {
+    setLoading(true);
     Promise.all([api.catalog(), api.brands(), api.sizes(), api.fabrics()])
       .then(([catalog, brands, sizes, fabrics]) => setCatalog({ ...catalog, brands, sizes, fabrics }))
-      .catch((reason) => setError(messageOf(reason, "Could not load catalog")));
+      .catch((reason) => setError(messageOf(reason, "Could not load catalog")))
+      .finally(() => setLoading(false));
   }
   useEffect(load, []);
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
       {error ? <p className="text-sm text-rose-700 lg:col-span-3">{error}</p> : null}
-      <MiniCreate title="Brand" value={brand} setValue={setBrand} onSave={() => api.createBrand({ name: brand }).then(load)} rows={(catalog?.brands ?? []).map((item) => item.name)} />
-      <MiniCreate title="Size" value={size} setValue={setSize} onSave={() => api.createSize({ name: size }).then(load)} rows={(catalog?.sizes ?? []).map((item) => item.name)} />
+      <MiniCreate title="Brand" value={brand} setValue={setBrand} onSave={() => api.createBrand({ name: brand }).then(load)} rows={(catalog?.brands ?? []).map((item) => item.name)} loading={loading} />
+      <MiniCreate title="Size" value={size} setValue={setSize} onSave={() => api.createSize({ name: size }).then(load)} rows={(catalog?.sizes ?? []).map((item) => item.name)} loading={loading} />
       <form
         className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
         onSubmit={(event) => {
@@ -184,13 +194,13 @@ export function AdminCatalogExtras() {
         <input className={field} required placeholder="Name" value={fabric} onChange={(event) => setFabric(event.target.value)} />
         <input className={field} placeholder="Composition" value={composition} onChange={(event) => setComposition(event.target.value)} />
         <button className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">Add</button>
-        <ul className="text-sm text-slate-600">{(catalog?.fabrics ?? []).map((item) => <li key={item.id}>{item.name}</li>)}</ul>
+        {loading ? <RowsSkeleton rows={3} /> : <ul className="text-sm text-slate-600">{(catalog?.fabrics ?? []).map((item) => <li key={item.id}>{item.name}</li>)}</ul>}
       </form>
     </div>
   );
 }
 
-function MiniCreate({ title, value, setValue, onSave, rows }: { title: string; value: string; setValue: (value: string) => void; onSave: () => Promise<unknown>; rows: string[] }) {
+function MiniCreate({ title, value, setValue, onSave, rows, loading = false }: { title: string; value: string; setValue: (value: string) => void; onSave: () => Promise<unknown>; rows: string[]; loading?: boolean }) {
   const [error, setError] = useState("");
   return (
     <form
@@ -205,7 +215,7 @@ function MiniCreate({ title, value, setValue, onSave, rows }: { title: string; v
       <input className={field} required placeholder="Name" value={value} onChange={(event) => setValue(event.target.value)} />
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
       <button className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">Add</button>
-      <ul className="text-sm text-slate-600">{rows.map((row) => <li key={row}>{row}</li>)}</ul>
+      {loading ? <RowsSkeleton rows={3} /> : <ul className="text-sm text-slate-600">{rows.map((row) => <li key={row}>{row}</li>)}</ul>}
     </form>
   );
 }
@@ -215,9 +225,11 @@ export function AdminOutlets() {
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", address: "", city: "", phone: "", hours: "" });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   function load() {
-    api.outlets().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load outlets")));
+    setLoading(true);
+    api.outlets().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load outlets"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
@@ -244,6 +256,7 @@ export function AdminOutlets() {
         <button className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">Save</button>
       </form>
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: `${item.name} · ${item.city}` }))}
         onEdit={async (id) => {
           const item = await api.outlet(id);
@@ -265,9 +278,11 @@ export function AdminPages() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   function load() {
-    api.managePages().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load pages")));
+    setLoading(true);
+    api.managePages().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load pages"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
@@ -292,6 +307,7 @@ export function AdminPages() {
         <button className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">Save</button>
       </form>
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.slug, label: item.title }))}
         onEdit={(slugKey) => {
           const item = items.find((page) => page.slug === slugKey);
@@ -317,9 +333,11 @@ export function AdminDelivery() {
   const [city, setCity] = useState("");
   const [fee, setFee] = useState("60");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   function load() {
-    api.zones().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load zones")));
+    setLoading(true);
+    api.zones().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load zones"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
@@ -344,6 +362,7 @@ export function AdminDelivery() {
         <button className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">Save</button>
       </form>
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: `${item.name} · ${item.city ?? "All"} · ${item.fee}` }))}
         onEdit={async (id) => {
           const item = await api.zone(id);
@@ -364,14 +383,17 @@ export function AdminDelivery() {
 export function AdminNewsletter() {
   const [items, setItems] = useState<Subscriber[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   function load() {
-    api.subscribers().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load subscribers")));
+    setLoading(true);
+    api.subscribers().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load subscribers"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
   return (
     <div className="space-y-3">
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: item.email }))}
         onDelete={async (id) => {
           await api.deleteSubscriber(id);
@@ -384,13 +406,15 @@ export function AdminNewsletter() {
 
 export function AdminSettings() {
   const { user, updateProfile, saveAvatar } = useAuth();
-  const { settings } = useStore();
+  const { settings, settingsReady } = useStore();
   const [password, setPassword] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [passwordNote, setPasswordNote] = useState("");
   const [form, setForm] = useState<Settings>(settings);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
   useEffect(() => setForm(settings), [settings]);
+
+  if (!settingsReady) return <RowsSkeleton rows={8} />;
 
   return (
     <div className="grid gap-5">
@@ -404,9 +428,9 @@ export function AdminSettings() {
       }}
     >
       <h2 className="text-sm font-semibold">Store settings</h2>
-      {(["storeName", "supportEmail", "supportPhone", "address", "facebookUrl", "instagramUrl", "bkashNumber", "nagadNumber"] as const).map((key) => (
+      {(["storeName", "supportEmail", "supportPhone", "address", "facebookUrl", "instagramUrl", "bkashNumber", "nagadNumber", "rocketNumber"] as const).map((key) => (
         <label key={key} className="block text-xs text-slate-500">
-          {key}
+          {key === "bkashNumber" ? "bKash Personal account number" : key === "nagadNumber" ? "Nagad account number" : key === "rocketNumber" ? "Rocket account number" : key}
           <input className={`${field} mt-1`} value={form[key] ?? ""} onChange={(event) => setForm({ ...form, [key]: key === "storeName" ? event.target.value : event.target.value || null })} />
         </label>
       ))}
@@ -468,8 +492,10 @@ export function AdminReturns() {
   const [items, setItems] = useState<StoreReturn[]>([]);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
   function load() {
-    api.returns().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load returns")));
+    setLoading(true);
+    api.returns().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load returns"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
 
@@ -480,9 +506,10 @@ export function AdminReturns() {
         Note for the next decision
         <input className={`${field} mt-1`} value={note} onChange={(event) => setNote(event.target.value)} />
       </label>
-      {items.length === 0 ? <p className="text-sm text-slate-500">No return requests yet.</p> : null}
+      {loading ? <RowsSkeleton rows={3} /> : null}
+      {!loading && items.length === 0 && !error ? <p className="text-sm text-slate-500">No return requests yet.</p> : null}
       <div className="space-y-3">
-        {items.map((item) => (
+        {!loading && items.map((item) => (
           <article key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -513,8 +540,10 @@ export function AdminPayments() {
   const [items, setItems] = useState<ManualPayment[]>([]);
   const [reason, setReason] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   function load() {
-    api.manualPayments().then(setItems).catch((err) => setError(messageOf(err, "Could not load payments")));
+    setLoading(true);
+    api.manualPayments().then(setItems).catch((err) => setError(messageOf(err, "Could not load payments"))).finally(() => setLoading(false));
   }
   useEffect(load, []);
   return (
@@ -522,6 +551,7 @@ export function AdminPayments() {
       {error ? <p className="text-sm text-rose-700">{error}</p> : null}
       <input className={field} placeholder="Reject reason" value={reason} onChange={(event) => setReason(event.target.value)} />
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: `${item.order?.orderNumber ?? item.provider} · ${item.transactionId ?? ""} · ${item.amount}` }))}
         onEdit={async (id) => {
           await api.approvePayment(id);
@@ -542,8 +572,10 @@ export function AdminSizeGuides() {
   const [categoryId, setCategoryId] = useState("");
   const [title, setTitle] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   function load() {
-    api.adminSizeGuides().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load size guides")));
+    setLoading(true);
+    api.adminSizeGuides().then(setItems).catch((reason) => setError(messageOf(reason, "Could not load size guides"))).finally(() => setLoading(false));
   }
   useEffect(() => {
     load();
@@ -575,6 +607,7 @@ export function AdminSizeGuides() {
         <button className="rounded-xl bg-[#2ec9a8] px-4 py-2 text-sm font-semibold text-white">Add</button>
       </form>
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: item.title }))}
         onEdit={async (id) => {
           await api.sizeGuide(id);
@@ -598,8 +631,10 @@ export function AdminVariants() {
   const [stock, setStock] = useState("0");
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
   function load() {
-    api.variants({ limit: 50, page: 1 }).then(setItems).catch((reason) => setError(messageOf(reason, "Could not load variants")));
+    setLoading(true);
+    api.variants({ limit: 50, page: 1 }).then(setItems).catch((reason) => setError(messageOf(reason, "Could not load variants"))).finally(() => setLoading(false));
   }
   useEffect(() => {
     load();
@@ -633,6 +668,7 @@ export function AdminVariants() {
       </form>
       {note ? <p className="text-sm text-slate-600 lg:col-span-2">{note}</p> : null}
       <ResourceTable
+        loading={loading}
         rows={items.map((item) => ({ id: item.id, label: `${item.sku} · stock ${item.stock}${item.isActive ? "" : " · inactive"}` }))}
         onEdit={async (id) => {
           const item = await api.variant(id);
@@ -651,10 +687,12 @@ export function AdminVariants() {
 
 function ResourceTable({
   rows,
+  loading = false,
   onEdit,
   onDelete,
 }: {
   rows: { id: string; label: string }[];
+  loading?: boolean;
   onEdit?: (id: string) => Promise<unknown> | void;
   onDelete?: (id: string) => Promise<unknown> | void;
 }) {
@@ -662,35 +700,38 @@ function ResourceTable({
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       {error ? <p className="px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      <table className="w-full text-left text-sm">
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-t border-slate-100">
-              <td className="px-4 py-3">{row.label}</td>
-              <td className="px-4 py-3 text-right">
-                {onEdit ? (
-                  <button type="button" className="mr-3 text-[#163a8a]" onClick={() => Promise.resolve(onEdit(row.id)).catch((reason) => setError(messageOf(reason, "Could not update")))}>
-                    Open
-                  </button>
-                ) : null}
-                {onDelete ? (
-                  <button
-                    type="button"
-                    className="text-rose-700"
-                    onClick={() => {
-                      if (!window.confirm("Delete this?")) return;
-                      Promise.resolve(onDelete(row.id)).catch((reason) => setError(messageOf(reason, "Could not delete")));
-                    }}
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {rows.length === 0 ? <p className="px-4 py-8 text-sm text-slate-500">Nothing here yet.</p> : null}
+      {loading ? <div className="p-4"><RowsSkeleton rows={5} columns={2} /></div> : rows.length === 0 ? (
+        <p className="px-4 py-8 text-sm text-slate-500">Nothing here yet.</p>
+      ) : (
+        <table className="w-full text-left text-sm">
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-t border-slate-100">
+                <td className="px-4 py-3">{row.label}</td>
+                <td className="px-4 py-3 text-right">
+                  {onEdit ? (
+                    <button type="button" className="mr-3 text-[#163a8a]" onClick={() => Promise.resolve(onEdit(row.id)).catch((reason) => setError(messageOf(reason, "Could not update")))}>
+                      Open
+                    </button>
+                  ) : null}
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      className="text-rose-700"
+                      onClick={() => {
+                        if (!window.confirm("Delete this?")) return;
+                        Promise.resolve(onDelete(row.id)).catch((reason) => setError(messageOf(reason, "Could not delete")));
+                      }}
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }

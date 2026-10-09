@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authenticate, authorize } from "../../app/middlewares/auth";
 import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { validateRequest } from "../../app/middlewares/validateRequest";
-import { applyUploadedImage, parseMultipartData, singleImageUpload } from "../../app/middlewares/upload";
+import { applyUploadedImage, parseMultipartData, singleHomeMediaUpload } from "../../app/middlewares/upload";
 import { homeController } from "./home.controller";
 import {
   createHomeBlockSchema,
@@ -25,7 +25,7 @@ router.post(
   "/",
   authenticate,
   authorize("ADMIN"),
-  singleImageUpload,
+  singleHomeMediaUpload,
   parseMultipartData,
   applyUploadedImage("ecommerce/home"),
   validateRequest({ body: createHomeBlockSchema }),
@@ -36,7 +36,7 @@ router.patch(
   "/:id",
   authenticate,
   authorize("ADMIN"),
-  singleImageUpload,
+  singleHomeMediaUpload,
   parseMultipartData,
   applyUploadedImage("ecommerce/home"),
   validateRequest({

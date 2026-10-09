@@ -17,6 +17,7 @@ const emptySettings = {
   instagramUrl: null,
   bkashNumber: null,
   nagadNumber: null,
+  rocketNumber: null,
 };
 
 const getSettings = async () => {
@@ -38,6 +39,7 @@ const getSettings = async () => {
       instagramUrl: settings.instagramUrl,
       bkashNumber: settings.bkashNumber,
       nagadNumber: settings.nagadNumber,
+      rocketNumber: settings.rocketNumber,
     };
   });
 };
@@ -57,6 +59,7 @@ const updateSettings = async (input: UpdateSettingsInput) => {
       instagramUrl: input.instagramUrl,
       bkashNumber: input.bkashNumber,
       nagadNumber: input.nagadNumber,
+      rocketNumber: input.rocketNumber,
     },
   });
 
@@ -71,6 +74,7 @@ const updateSettings = async (input: UpdateSettingsInput) => {
     instagramUrl: settings.instagramUrl,
     bkashNumber: settings.bkashNumber,
     nagadNumber: settings.nagadNumber,
+    rocketNumber: settings.rocketNumber,
   };
 };
 

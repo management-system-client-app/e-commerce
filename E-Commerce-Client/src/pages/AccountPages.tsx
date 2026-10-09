@@ -3,9 +3,10 @@ import { Link, NavLink, Navigate, Outlet as RouterOutlet, useNavigate, useParams
 import { ApiError, api } from "../api";
 import { UserFace } from "../components/Chrome";
 import { ProductGrid } from "../components/ProductCard";
+import { DetailSkeleton, ProductGridSkeleton, RowsSkeleton } from "../components/Skeleton";
 import { money, titleCaseStatus } from "../format";
 import { useAuth, useCart } from "../state";
-import type { CmsPage, Outlet, ProductCardData, TrackedOrder } from "../types";
+import type { CmsPage, Outlet, ProductCardData, SavedAddress, TrackedOrder } from "../types";
 
 const OAUTH_TOKEN_KEY = "oauth_token";
 
@@ -48,7 +49,7 @@ export function AuthCallbackPage() {
   return (
     <div className="auth">
       <h1 className="label">Login</h1>
-      {error ? <p className="error">{error}</p> : <p className="note">Signing you in…</p>}
+      {error ? <p className="error">{error}</p> : <DetailSkeleton />}
       {error ? <p className="note"><Link to="/login">Back to login</Link></p> : null}
     </div>
   );
@@ -76,32 +77,38 @@ export function LoginPage() {
   if (user) return <Navigate to={user.accountType === "ADMIN" ? "/admin" : "/"} replace />;
 
   return (
-    <form className="auth" onSubmit={onSubmit}>
-      <h1 className="label">Login</h1>
-      <div style={{ height: 16 }} />
-      <label className="field">
-        <span>Email</span>
-        <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
-      </label>
-      <label className="field">
-        <span>Password</span>
-        <input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} />
-      </label>
-      {error ? <p className="error">{error}</p> : null}
-      <button className="btn wide" type="submit">
-        Login
-      </button>
-      <p className="note">
-        New here? <Link to="/register">Register</Link>
-        {" · "}
-        <Link to="/forgot-password">Forgot password</Link>
-      </p>
-      <p className="note">
-        <a href={`${import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/v1"}/auth/google`}>Google</a>
-        {" · "}
-        <a href={`${import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/v1"}/auth/facebook`}>Facebook</a>
-      </p>
-      <p className="note">Admin accounts sign in with this same form.</p>
+    <form className="auth auth-layout auth-login" onSubmit={onSubmit}>
+      <div className="auth-aside">
+        <p className="auth-kicker">MEMBER ACCESS</p>
+        <h1>Welcome back.</h1>
+        <p>Pick up right where you left off.</p>
+      </div>
+      <div className="auth-form">
+        <p className="label">ACCOUNT LOGIN</p>
+        <h2>Sign in</h2>
+        <label className="field">
+          <span>Email</span>
+          <input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
+        </label>
+        {error ? <p className="error">{error}</p> : null}
+        <button className="btn wide" type="submit">
+          Login
+        </button>
+        <p className="note">
+          New here? <Link to="/register">Create an account</Link>
+          {" · "}
+          <Link to="/forgot-password">Forgot password?</Link>
+        </p>
+        <div className="auth-social">
+          <a href={`${import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/v1"}/auth/google`}>Google</a>
+          <a href={`${import.meta.env.VITE_API_URL ?? "http://localhost:5000/api/v1"}/auth/facebook`}>Facebook</a>
+        </div>
+        <p className="note">Admin accounts sign in with this same form.</p>
+      </div>
     </form>
   );
 }
@@ -254,53 +261,63 @@ export function RegisterPage() {
   if (user) return <Navigate to="/" replace />;
 
   return (
-    <form className="auth" onSubmit={onSubmit}>
-      <h1 className="label">Register</h1>
-      <div style={{ height: 16 }} />
-      {preview ? <img className="user-face" src={preview} alt="" style={{ width: 72, height: 72 }} /> : <span className="user-face" style={{ width: 72, height: 72 }}>{(form.firstName || "?").slice(0, 1).toUpperCase()}</span>}
-      <label className="field" style={{ marginTop: 12 }}>
-        <span>Profile photo</span>
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          onChange={(event) => {
-            const file = event.target.files?.[0] ?? null;
-            setPhoto(file);
-            setPreview((current) => {
-              if (current) URL.revokeObjectURL(current);
-              return file ? URL.createObjectURL(file) : "";
-            });
-          }}
-        />
-      </label>
-      <label className="field">
-        <span>First name</span>
-        <input required value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} />
-      </label>
-      <label className="field">
-        <span>Last name</span>
-        <input required value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} />
-      </label>
-      <label className="field">
-        <span>Email</span>
-        <input type="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-      </label>
-      <label className="field">
-        <span>Phone</span>
-        <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
-      </label>
-      <label className="field">
-        <span>Password</span>
-        <input type="password" required minLength={8} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-      </label>
-      <label className="field">
-        <span>Confirm password</span>
-        <input type="password" required value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
-      </label>
-      {error ? <p className="error">{error}</p> : null}
-      <button className="btn wide" type="submit">
-        Register
-      </button>
+    <form className="auth auth-layout auth-register" onSubmit={onSubmit}>
+      <div className="auth-aside">
+        <p className="auth-kicker">YOUR ACCOUNT</p>
+        <h1>A fresh start.</h1>
+        <p>Set up your profile and make checkout yours.</p>
+      </div>
+      <div className="auth-form">
+        <p className="label">CREATE ACCOUNT</p>
+        <h2>Join us</h2>
+        {preview ? <img className="user-face auth-avatar" src={preview} alt="Profile preview" /> : <UserFace className="auth-avatar" user={{ firstName: form.firstName, email: form.email, avatarUrl: null }} size={72} />}
+        <label className="field">
+          <span>Profile photo</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(event) => {
+              const file = event.target.files?.[0] ?? null;
+              setPhoto(file);
+              setPreview((current) => {
+                if (current) URL.revokeObjectURL(current);
+                return file ? URL.createObjectURL(file) : "";
+              });
+            }}
+          />
+        </label>
+        <div className="auth-name-grid">
+          <label className="field">
+            <span>First name</span>
+            <input autoComplete="given-name" required value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} />
+          </label>
+          <label className="field">
+            <span>Last name</span>
+            <input autoComplete="family-name" required value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} />
+          </label>
+        </div>
+        <label className="field">
+          <span>Email</span>
+          <input type="email" autoComplete="email" required value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Phone</span>
+          <input type="tel" autoComplete="tel" value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Password</span>
+          <input type="password" autoComplete="new-password" required minLength={8} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+        </label>
+        <label className="field">
+          <span>Confirm password</span>
+          <input type="password" autoComplete="new-password" required value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} />
+        </label>
+        {error ? <p className="error">{error}</p> : null}
+        <button className="btn wide" type="submit">
+          Create account
+        </button>
+        <p className="note">Already have an account? <Link to="/login">Sign in</Link></p>
+      </div>
     </form>
   );
 }
@@ -309,15 +326,22 @@ export function WishlistPage() {
   const { user, ready } = useAuth();
   const [products, setProducts] = useState<ProductCardData[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!ready) return;
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     api
       .wishlist()
       .then((items) => setProducts(items.map((item) => item.product)))
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load wishlist"));
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load wishlist"))
+      .finally(() => setLoading(false));
   }, [ready, user]);
+
+  if (!ready || loading) return <ProductGridSkeleton />;
 
   if (ready && !user) {
     return (
@@ -333,7 +357,8 @@ export function WishlistPage() {
         <h1>Wishlist</h1>
       </div>
       {error ? <p className="error">{error}</p> : null}
-      {products.length === 0 ? <p className="empty">Sorry! No result.</p> : <ProductGrid products={products} />}
+      {!error && products.length === 0 ? <p className="empty">Sorry! No result.</p> : null}
+      {products.length > 0 ? <ProductGrid products={products} /> : null}
     </div>
   );
 }
@@ -343,15 +368,19 @@ export function TrackPage() {
   const [phone, setPhone] = useState("");
   const [order, setOrder] = useState<TrackedOrder | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setError("");
     setOrder(null);
+    setLoading(true);
     try {
       setOrder(await api.track(orderNumber, phone));
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "Order not found");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -372,6 +401,7 @@ export function TrackPage() {
           Track
         </button>
       </form>
+      {loading ? <RowsSkeleton rows={3} /> : null}
       {order ? (
         <div style={{ marginTop: 20 }}>
           <p>
@@ -398,18 +428,21 @@ export function TrackPage() {
 export function OutletsPage() {
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.outlets().then(setOutlets).catch((reason: unknown) => {
       setError(reason instanceof Error ? reason.message : "Could not load outlets");
-    });
+    }).finally(() => setLoading(false));
   }, []);
 
   return (
     <div>
       <h1 className="label">Outlets</h1>
       {error ? <p className="error">{error}</p> : null}
-      {outlets.map((outlet) => (
+      {loading ? <RowsSkeleton rows={4} /> : null}
+      {!loading && !error && outlets.length === 0 ? <p className="note">No outlets available.</p> : null}
+      {!loading && outlets.map((outlet) => (
         <article key={outlet.id} className="outlet">
           <h2>{outlet.name}</h2>
           <p>
@@ -432,18 +465,21 @@ export function CmsPageView() {
   const { slug = "" } = useParams();
   const [page, setPage] = useState<CmsPage | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setPage(null);
     setError("");
+    setLoading(true);
     api
       .page(slug)
       .then(setPage)
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Page not found"));
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Page not found"))
+      .finally(() => setLoading(false));
   }, [slug]);
 
   if (error) return <p className="empty">{error}</p>;
-  if (!page) return <p className="note">Loading…</p>;
+  if (loading || !page) return <DetailSkeleton />;
   return (
     <article className="cms">
       <h1>{page.title}</h1>
@@ -452,7 +488,7 @@ export function CmsPageView() {
   );
 }
 
-function ChangePassword() {
+export function ChangePasswordPage() {
   const { updateProfile } = useAuth();
   const [form, setForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [note, setNote] = useState("");
@@ -471,7 +507,7 @@ function ChangePassword() {
 
   return (
     <form style={{ marginTop: 24, maxWidth: 420 }} onSubmit={onSubmit}>
-      <h2 className="label">Change password</h2>
+      <h1 className="label">Change password</h1>
       <label className="field">
         <span>Current password</span>
         <input type="password" required value={form.currentPassword} onChange={(event) => setForm({ ...form, currentPassword: event.target.value })} />
@@ -493,7 +529,24 @@ function ChangePassword() {
 export function AccountLayout() {
   const { user, ready, logout } = useAuth();
   const navigate = useNavigate();
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <div className="account-shell account-shell-loading" role="status" aria-label="Loading account">
+        <aside className="account-side">
+          <div className="account-loading-user" />
+          <div className="account-loading-links">
+            {Array.from({ length: 6 }, (_, index) => <div key={index} />)}
+          </div>
+        </aside>
+        <div className="account-panel account-loading-panel">
+          <div />
+          <div />
+          <div />
+          <div />
+        </div>
+      </div>
+    );
+  }
   if (!user) return <LoginPage />;
   if (user.accountType === "ADMIN") return <Navigate to="/admin" replace />;
 
@@ -509,6 +562,8 @@ export function AccountLayout() {
         </div>
         <p className="group">Manage My Account</p>
         <NavLink to="/account" end className={({ isActive }) => (isActive ? "on" : "")}>Profile</NavLink>
+        <NavLink to="/account/address" className={({ isActive }) => (isActive ? "on" : "")}>Delivery address</NavLink>
+        <NavLink to="/account/password" className={({ isActive }) => (isActive ? "on" : "")}>Change password</NavLink>
         <p className="group">My Orders</p>
         <NavLink to="/account/orders" className={({ isActive }) => (isActive ? "on" : "")}>Orders</NavLink>
         <NavLink to="/account/returns" className={({ isActive }) => (isActive ? "on" : "")}>Returns</NavLink>
@@ -580,7 +635,86 @@ export function AccountProfile() {
         <button className="btn" type="submit">Save profile</button>
         {profileNote ? <p className="note">{profileNote}</p> : null}
       </form>
-      <ChangePassword />
+    </div>
+  );
+}
+
+export function DeliveryAddressPage() {
+  const [address, setAddress] = useState({
+    fullName: "",
+    phone: "",
+    line1: "",
+    line2: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "Bangladesh",
+  });
+  const [addressNote, setAddressNote] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    api.defaultAddress().then((saved) => {
+      if (!active || !saved) return;
+      setAddress({
+        fullName: saved.fullName,
+        phone: saved.phone,
+        line1: saved.line1,
+        line2: saved.line2 ?? "",
+        city: saved.city,
+        state: saved.state ?? "",
+        postalCode: saved.postalCode,
+        country: saved.country,
+      });
+    }).catch(() => undefined).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div>
+      <h1 className="label">Delivery address</h1>
+      {loading ? <DetailSkeleton /> : (
+      <form
+        style={{ marginTop: 16, maxWidth: 420 }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          setAddressNote("");
+          api.saveDefaultAddress({
+            ...address,
+            line2: address.line2 || null,
+            state: address.state || null,
+          }).then((saved: SavedAddress) => {
+            setAddress({
+              fullName: saved.fullName,
+              phone: saved.phone,
+              line1: saved.line1,
+              line2: saved.line2 ?? "",
+              city: saved.city,
+              state: saved.state ?? "",
+              postalCode: saved.postalCode,
+              country: saved.country,
+            });
+            setAddressNote("Default address saved. It will be used at checkout.");
+          }).catch((reason: unknown) => setAddressNote(reason instanceof Error ? reason.message : "Could not save address"));
+        }}
+      >
+        <label className="field"><span>Full name</span><input required value={address.fullName} onChange={(event) => setAddress({ ...address, fullName: event.target.value })} /></label>
+        <label className="field"><span>Phone</span><input required minLength={7} value={address.phone} onChange={(event) => setAddress({ ...address, phone: event.target.value })} /></label>
+        <label className="field"><span>Address</span><input required value={address.line1} onChange={(event) => setAddress({ ...address, line1: event.target.value })} /></label>
+        <label className="field"><span>Address line 2</span><input value={address.line2} onChange={(event) => setAddress({ ...address, line2: event.target.value })} /></label>
+        <label className="field"><span>City</span><input required minLength={2} value={address.city} onChange={(event) => setAddress({ ...address, city: event.target.value })} /></label>
+        <label className="field"><span>State</span><input value={address.state} onChange={(event) => setAddress({ ...address, state: event.target.value })} /></label>
+        <label className="field"><span>Postal code</span><input required value={address.postalCode} onChange={(event) => setAddress({ ...address, postalCode: event.target.value })} /></label>
+        <label className="field"><span>Country</span><input required value={address.country} onChange={(event) => setAddress({ ...address, country: event.target.value })} /></label>
+        <button className="btn" type="submit">Save delivery address</button>
+        {addressNote ? <p className="note">{addressNote}</p> : null}
+      </form>
+      )}
     </div>
   );
 }
@@ -590,12 +724,13 @@ export function AccountOrders() {
     { id: string; orderNumber: string; status: string; total: string | number; placedAt: string; items?: { id: string; productName: string; quantity: number; lineTotal?: string | number }[] }[]
   >([]);
   const [ordersError, setOrdersError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   function load() {
     api.orders().then(setOrders).catch((reason: unknown) => {
       setOrders([]);
       setOrdersError(reason instanceof Error ? reason.message : "Could not load orders");
-    });
+    }).finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -603,15 +738,22 @@ export function AccountOrders() {
     function onShow() {
       if (document.visibilityState === "visible") load();
     }
+    const refreshTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") load();
+    }, 15000);
     document.addEventListener("visibilitychange", onShow);
-    return () => document.removeEventListener("visibilitychange", onShow);
+    return () => {
+      window.clearInterval(refreshTimer);
+      document.removeEventListener("visibilitychange", onShow);
+    };
   }, []);
 
   return (
     <div>
       <h1 className="label">My Orders</h1>
       {ordersError ? <p className="error">{ordersError}</p> : null}
-      {orders.length === 0 && !ordersError ? <p className="note">No orders yet.</p> : null}
+      {loading ? <RowsSkeleton rows={4} /> : null}
+      {!loading && orders.length === 0 && !ordersError ? <p className="note">No orders yet.</p> : null}
       <div className="order-list">
         {orders.map((order) => (
           <article className="receipt compact" key={order.id}>
@@ -640,10 +782,13 @@ export function AccountReturns() {
   const [returnItem, setReturnItem] = useState("");
   const [returnNote, setReturnNote] = useState("");
   const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
 
   function load() {
-    api.orders().then(setOrders).catch(() => setOrders([]));
-    api.returns().then(setReturns).catch(() => setReturns([]));
+    Promise.all([
+      api.orders().then(setOrders).catch(() => setOrders([])),
+      api.returns().then(setReturns).catch(() => setReturns([])),
+    ]).finally(() => setLoading(false));
   }
 
   useEffect(load, []);
@@ -651,8 +796,9 @@ export function AccountReturns() {
   return (
     <div>
       <h1 className="label">My Returns</h1>
-      {returns.length === 0 ? <p className="note">No return requests yet.</p> : null}
-      {returns.map((item) => (
+      {loading ? <RowsSkeleton rows={3} /> : null}
+      {!loading && returns.length === 0 ? <p className="note">No return requests yet.</p> : null}
+      {!loading && returns.map((item) => (
         <article className="receipt compact" key={item.id}>
           <p className="receipt-number">{item.order?.orderNumber ?? "Return"}</p>
           <p className="note">{titleCaseStatus(item.reason)} · {titleCaseStatus(item.status)}</p>
@@ -701,12 +847,13 @@ export function AccountReturns() {
 }
 
 export function CartPage() {
-  const { cart, remove, setQuantity, busy } = useCart();
+  const { cart, remove, setQuantity, busy, loading } = useCart();
   return (
     <div className="narrow" style={{ maxWidth: 720 }}>
       <h1 className="label">Cart</h1>
-      {cart.items.length === 0 ? <p className="empty">Your cart is empty.</p> : null}
-      {cart.items.map((line) => (
+      {loading ? <RowsSkeleton rows={3} /> : null}
+      {!loading && cart.items.length === 0 ? <p className="empty">Your cart is empty.</p> : null}
+      {!loading && cart.items.map((line) => (
         <div className="line" key={line.id}>
           {line.imageUrl ? <img src={line.imageUrl} alt="" /> : <div className="photo-fallback" />}
           <div>
@@ -733,7 +880,7 @@ export function CartPage() {
           </div>
         </div>
       ))}
-      {cart.items.length > 0 ? (
+      {!loading && cart.items.length > 0 ? (
         <>
           <div className="sub" style={{ marginTop: 16 }}>
             <span>Subtotal</span>

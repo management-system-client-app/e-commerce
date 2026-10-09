@@ -47,6 +47,8 @@ router.patch(
   "/:id",
   authenticate,
   authorize("ADMIN"),
+  productImagesUpload,
+  parseMultipartData,
   validateRequest({
     params: productIdParamSchema,
     body: updateProductSchema,

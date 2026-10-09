@@ -1,9 +1,12 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiError, api } from "../api";
+import { DetailSkeleton } from "../components/Skeleton";
 import { useStore } from "../state";
+import type { ProductImage } from "../types";
 
 type SizeRow = { sizeId: string; fabricId: string; stock: string };
+const MAX_PRODUCT_IMAGES = 6;
 
 const fieldClass =
   "h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#2ec9a8]";
@@ -29,6 +32,7 @@ export function AdminProductForm() {
   const [categoryId, setCategoryId] = useState("");
   const [rows, setRows] = useState<SizeRow[]>([{ sizeId: "", fabricId: "", stock: "0" }]);
   const [images, setImages] = useState<File[]>([]);
+  const [existingImages, setExistingImages] = useState<ProductImage[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(!editing);
@@ -46,6 +50,7 @@ export function AdminProductForm() {
         setCompareAtPrice(product.compareAtPrice == null ? "" : String(product.compareAtPrice));
         setBrandId(product.brand.id);
         setCategoryId(product.category.id);
+        setExistingImages(product.images);
         setReady(true);
       })
       .catch((reason) => {
@@ -84,7 +89,7 @@ export function AdminProductForm() {
           compareAtPrice: compare ?? null,
           brandId,
           categoryId,
-        });
+        }, images);
         navigate("/admin/products");
         return;
       }
@@ -124,7 +129,7 @@ export function AdminProductForm() {
     }
   }
 
-  if (!ready) return <p className="text-sm text-slate-500">Loading…</p>;
+  if (!ready) return <DetailSkeleton />;
 
   return (
     <form onSubmit={onSubmit} className="mx-auto max-w-3xl space-y-5">
@@ -242,18 +247,57 @@ export function AdminProductForm() {
               />
             </div>
           ))}
-          <label className="grid gap-1.5 text-sm">
-            <span className="text-slate-500">Photos</span>
-            <input
-              className="text-sm"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              multiple
-              onChange={(event) => setImages([...(event.target.files ?? [])].slice(0, 5))}
-            />
-          </label>
         </section>
       )}
+
+      <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div>
+          <h2 className="text-sm font-semibold">Product photos</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Add up to {MAX_PRODUCT_IMAGES} images per product. {existingImages.length + images.length} of {MAX_PRODUCT_IMAGES} selected.
+          </p>
+        </div>
+        {existingImages.length > 0 ? (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+            {existingImages.map((photo) => (
+              <img key={photo.id ?? photo.url} src={photo.url} alt={photo.alt ?? name} className="aspect-square w-full rounded-lg object-cover" />
+            ))}
+          </div>
+        ) : null}
+        <label className="grid gap-1.5 text-sm">
+          <span className="text-slate-500">{existingImages.length > 0 ? "Add more photos" : "Choose photos"}</span>
+          <input
+            className="text-sm"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            disabled={existingImages.length + images.length >= MAX_PRODUCT_IMAGES}
+            onChange={(event) => {
+              const chosen = [...(event.target.files ?? [])];
+              const available = MAX_PRODUCT_IMAGES - existingImages.length - images.length;
+              if (chosen.length > available) {
+                setError(`You can add only ${available} more image${available === 1 ? "" : "s"} to this product.`);
+              } else {
+                setError("");
+              }
+              setImages((current) => [...current, ...chosen.slice(0, available)]);
+              event.target.value = "";
+            }}
+          />
+        </label>
+        {images.length > 0 ? (
+          <ul className="space-y-1 text-xs text-slate-600">
+            {images.map((photo, index) => (
+              <li key={`${photo.name}-${photo.lastModified}-${index}`} className="flex items-center justify-between gap-3">
+                <span className="truncate">{photo.name}</span>
+                <button type="button" className="shrink-0 text-rose-700" onClick={() => setImages((current) => current.filter((_, photoIndex) => photoIndex !== index))}>
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </section>
 
       <button
         type="submit"

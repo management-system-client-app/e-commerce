@@ -1,10 +1,25 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, api } from "../api";
-import { ProductGrid } from "../components/ProductCard";
-import { money, productFlags } from "../format";
+import { ProductCarousel } from "../components/ProductCard";
+import { DetailSkeleton, ProductGridSkeleton, RowsSkeleton } from "../components/Skeleton";
+import { coverImage, money, productFlags } from "../format";
 import { useAuth, useCart } from "../state";
 import type { ProductCardData, ProductDetail, Review, SizeGuide } from "../types";
+
+const RECENT_PRODUCTS_KEY = "recently_viewed_products";
+
+function recordRecentlyViewed(id: string) {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(RECENT_PRODUCTS_KEY) ?? "[]");
+    const ids = Array.isArray(stored) ? stored.filter((value): value is string => typeof value === "string") : [];
+    const previous = ids.filter((productId) => productId !== id).slice(0, 5);
+    localStorage.setItem(RECENT_PRODUCTS_KEY, JSON.stringify([id, ...previous]));
+    return previous;
+  } catch {
+    return [];
+  }
+}
 
 export function ProductPage() {
   const { id = "" } = useParams();
@@ -23,6 +38,11 @@ export function ProductPage() {
   const [quantity, setQuantity] = useState(1);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [relatedLoading, setRelatedLoading] = useState(true);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [recentProducts, setRecentProducts] = useState<ProductCardData[]>([]);
+  const [recentIndex, setRecentIndex] = useState(0);
+  const [recentLoading, setRecentLoading] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, title: "", comment: "" });
   const [reviewMessage, setReviewMessage] = useState("");
 
@@ -30,22 +50,33 @@ export function ProductPage() {
     let active = true;
     setProduct(null);
     setError("");
+    setRecentProducts([]);
+    setRecentIndex(0);
     api
       .product(id)
       .then((next) => {
         if (!active) return;
         setProduct(next);
+        const previousIds = recordRecentlyViewed(id);
+        setRecentLoading(previousIds.length > 0);
+        Promise.all(previousIds.map((productId) => api.product(productId).catch(() => null)))
+          .then((items) => {
+            if (active) setRecentProducts(items.filter((item): item is ProductDetail => item !== null));
+          })
+          .finally(() => {
+            if (active) setRecentLoading(false);
+          });
         const first = next.variants.find((variant) => variant.isActive !== false) ?? next.variants[0];
         setSizeId(first?.size.id ?? null);
         setColorId(first?.color?.id ?? null);
         setFabricId(first?.fabric.id ?? null);
         setImage(0);
-        api.related(id).then((items) => active && setRelated(items)).catch(() => undefined);
+        api.related(id).then((items) => active && setRelated(items)).catch(() => undefined).finally(() => active && setRelatedLoading(false));
         api.reviews(id).then((result) => {
           if (!active) return;
           setReviews(result.items);
           setAverage(result.summary.averageRating);
-        }).catch(() => undefined);
+        }).catch(() => undefined).finally(() => active && setReviewsLoading(false));
         api.sizeGuides(next.category.id).then((items) => active && setGuides(items)).catch(() => undefined);
       })
       .catch((reason: unknown) => {
@@ -54,6 +85,11 @@ export function ProductPage() {
     return () => {
       active = false;
     };
+  }, [id]);
+
+  useEffect(() => {
+    setRelatedLoading(true);
+    setReviewsLoading(true);
   }, [id]);
 
   const variants = useMemo(
@@ -91,7 +127,7 @@ export function ProductPage() {
   }, [product, colorId]);
 
   if (error) return <p className="error">{error}</p>;
-  if (!product) return <p className="note">Loading…</p>;
+  if (!product) return <DetailSkeleton />;
 
   const flags = productFlags(product);
   const unit = selected?.price != null ? Number(selected.price) : flags.price;
@@ -156,7 +192,22 @@ export function ProductPage() {
       <div className="pdp">
         <div>
           <div className="gallery-main">
-            {photo ? <img src={photo.url} alt={photo.alt || product.name} /> : <div className="photo-fallback">Photo</div>}
+            {photo ? (
+              <img
+                src={photo.url}
+                alt={photo.alt || product.name}
+                onMouseMove={(event) => {
+                  const bounds = event.currentTarget.parentElement?.getBoundingClientRect();
+                  if (!bounds) return;
+                  const x = ((event.clientX - bounds.left) / bounds.width) * 100;
+                  const y = ((event.clientY - bounds.top) / bounds.height) * 100;
+                  event.currentTarget.style.setProperty("--zoom-x", `${x}%`);
+                  event.currentTarget.style.setProperty("--zoom-y", `${y}%`);
+                }}
+              />
+            ) : (
+              <div className="photo-fallback">Photo</div>
+            )}
           </div>
           <div className="thumbs">
             {gallery.map((item, index) => (
@@ -253,6 +304,41 @@ export function ProductPage() {
           <div className="prose">{product.description}</div>
           {product.careInstructions ? <p className="note">Care: {product.careInstructions}</p> : null}
         </div>
+        <aside className="recent-viewed" aria-label="Recently viewed products">
+          <div className="recent-viewed-heading">
+            <h2>Recently Viewed</h2>
+            {recentProducts.length > 1 ? (
+              <div className="recent-viewed-controls">
+                <button type="button" aria-label="Previous recently viewed product" onClick={() => setRecentIndex((index) => (index - 1 + recentProducts.length) % recentProducts.length)}>‹</button>
+                <button type="button" aria-label="Next recently viewed product" onClick={() => setRecentIndex((index) => (index + 1) % recentProducts.length)}>›</button>
+              </div>
+            ) : null}
+          </div>
+          {recentLoading ? <ProductGridSkeleton count={1} /> : null}
+          {!recentLoading && recentProducts.length > 0 ? (() => {
+            const recent = recentProducts[recentIndex];
+            const recentImage = coverImage(recent);
+            return (
+              <>
+                <Link className="recent-viewed-card" to={`/product/${recent.id}`}>
+                  <div className="recent-viewed-photo">
+                    {recentImage ? <img src={recentImage} alt={recent.name} /> : <div className="photo-fallback" />}
+                    {productFlags(recent).isNew ? <span className="flag">New</span> : null}
+                  </div>
+                  <strong>{recent.name}</strong>
+                  <span className="price">{money(recent.basePrice)}</span>
+                </Link>
+                {recentProducts.length > 1 ? (
+                  <div className="recent-viewed-dots" aria-label={`Product ${recentIndex + 1} of ${recentProducts.length}`}>
+                    {recentProducts.map((item, index) => (
+                      <button key={item.id} type="button" className={index === recentIndex ? "on" : ""} aria-label={`Show product ${index + 1}`} onClick={() => setRecentIndex(index)} />
+                    ))}
+                  </div>
+                ) : null}
+              </>
+            );
+          })() : null}
+        </aside>
       </div>
 
       <section className="section">
@@ -260,7 +346,8 @@ export function ProductPage() {
           <h2>Reviews {average ? `· ${average}` : ""}</h2>
         </div>
         <div className="reviews">
-          {reviews.length === 0 ? <p className="note">No reviews yet.</p> : null}
+          {reviewsLoading ? <RowsSkeleton rows={3} /> : null}
+          {!reviewsLoading && reviews.length === 0 ? <p className="note">No reviews yet.</p> : null}
           {reviews.map((review) => (
             <article key={review.id} className="review">
               <p className="stars">{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</p>
@@ -312,12 +399,13 @@ export function ProductPage() {
         </div>
       </section>
 
-      {related.length > 0 ? (
+      {relatedLoading ? <ProductGridSkeleton count={4} /> : null}
+      {!relatedLoading && related.length > 0 ? (
         <section className="section">
           <div className="section-head">
             <h2>Related</h2>
           </div>
-          <ProductGrid products={related} />
+          <ProductCarousel products={related} />
         </section>
       ) : null}
 

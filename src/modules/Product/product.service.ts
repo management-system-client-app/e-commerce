@@ -512,14 +512,28 @@ const getSingleProduct = async (id: string) => {
   return withProductFlags(product);
 };
 
-const updateProduct = async (id: string, input: UpdateProductInput) => {
+const updateProduct = async (
+  id: string,
+  input: UpdateProductInput,
+  images: { url: string; alt: string }[] = [],
+) => {
   const existing = await prisma.product.findUnique({
     where: { id },
-    select: { id: true, basePrice: true, publishedAt: true, status: true },
+    select: {
+      id: true,
+      basePrice: true,
+      publishedAt: true,
+      status: true,
+      images: { select: { sortOrder: true } },
+    },
   });
 
   if (!existing) {
     throw new NotFoundError("Product not found");
+  }
+
+  if (existing.images.length + images.length > 6) {
+    throw AppError.badRequest("A product can have up to 6 images");
   }
 
   await assertCategoryAndBrand(input.categoryId, input.brandId);
@@ -530,6 +544,16 @@ const updateProduct = async (id: string, input: UpdateProductInput) => {
   }
 
   const data: Prisma.ProductUncheckedUpdateInput = { ...input };
+  if (images.length > 0) {
+    data.images = {
+      create: images.map((image, index) => ({
+        url: image.url,
+        alt: image.alt,
+        sortOrder: existing.images.length + index,
+        isPrimary: existing.images.length === 0 && index === 0,
+      })),
+    };
+  }
 
   if (input.status === "ACTIVE" && !existing.publishedAt) {
     data.publishedAt = new Date();

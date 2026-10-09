@@ -1,19 +1,19 @@
 import { FormEvent, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { RowsSkeleton } from "./Skeleton";
 import { money } from "../format";
 import { categoryImage, useAuth, useCart, useStore } from "../state";
 import type { Category, User } from "../types";
 
-export function UserFace({ user, size = 32 }: { user: Pick<User, "firstName" | "email" | "avatarUrl">; size?: number }) {
-  const letter = (user.firstName || user.email || "?").slice(0, 1).toUpperCase();
+export function UserFace({ user, size = 32, className = "" }: { user: Pick<User, "firstName" | "email" | "avatarUrl">; size?: number; className?: string }) {
   const style = { width: size, height: size, fontSize: Math.max(11, Math.round(size * 0.4)) };
   if (user.avatarUrl) {
-    return <img className="user-face" src={user.avatarUrl} alt="" style={style} />;
+    return <img className={`user-face ${className}`} src={user.avatarUrl} alt="" style={style} />;
   }
   return (
-    <span className="user-face" style={style} aria-hidden="true">
-      {letter}
+    <span className={`user-face user-face-default ${className}`} style={style} role="img" aria-label="Default user avatar">
+      <IconUser size={Math.max(13, Math.round(size * 0.58))} />
     </span>
   );
 }
@@ -55,9 +55,28 @@ function IconGrid() {
     </svg>
   );
 }
-function IconUser() {
+function IconTracking() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 6h11v11H3zM14 10h4l3 3v4h-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <circle cx="7.5" cy="18" r="1.7" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="17.5" cy="18" r="1.7" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+function IconOutlets() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="9" cy="6" r="2" fill="currentColor" />
+      <circle cx="15" cy="12" r="2" fill="currentColor" />
+      <circle cx="8" cy="18" r="2" fill="currentColor" />
+    </svg>
+  );
+}
+function IconUser({ size = 18 }: { size?: number } = {}) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.6" />
       <path d="M5 19.2c1.4-3 3.8-4.4 7-4.4s5.6 1.4 7 4.4" stroke="currentColor" strokeWidth="1.6" />
     </svg>
@@ -121,74 +140,41 @@ function navClass(href: string, isActive: boolean, pathname: string, search: str
 }
 
 export function Header() {
-  const { settings, promo } = useStore();
+  const { promo } = useStore();
   const { user } = useAuth();
   const { cart, setDrawer } = useCart();
   const menus = useMenus();
   const navigate = useNavigate();
   const location = useLocation();
   const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   function onSearch(event: FormEvent) {
     event.preventDefault();
     const term = query.trim();
     navigate(term ? `/shop?search=${encodeURIComponent(term)}` : "/shop");
-    setSearchOpen(false);
   }
 
   return (
     <>
-      <header className="header">
+      <header className={location.pathname === "/" ? "header home-header" : "header"}>
         {promo ? (
           <div className="promo">
             <Link to="/shop">{promo}</Link>
           </div>
         ) : null}
         <div className="topbar">
-          <Link to="/" className="logo">
-            {settings.storeName}
+          <Link to="/" className="logo sara-logo" aria-label="SaRa Lifestyle home">
+            <span className="sara-logo-main">SaRa</span>
+            <span className="sara-logo-sub">LIFESTYLE</span>
           </Link>
-          <button type="button" className="cat-btn" onClick={() => setMenuOpen(true)}>
-            <IconGrid />
-            Shop By Category
-          </button>
-          <nav className="top-nav" aria-label="Shop">
-            <NavLink to="/" end className={({ isActive }) => (isActive ? "on" : "")}>
-              Home
-            </NavLink>
-            {menus
-              .filter((item) => item.label !== "Home")
-              .map((item) => (
-                <div className="menu-item" key={item.label}>
-                  <Link
-                    to={item.href}
-                    className={navClass(item.href, false, location.pathname, location.search)}
-                    aria-current={navClass(item.href, false, location.pathname, location.search) ? "page" : undefined}
-                  >
-                    {item.label}
-                  </Link>
-                  {item.items.length > 0 ? (
-                    <div className="dropdown">
-                      {item.items.map((child) => (
-                        <Link key={child.href + child.label} to={child.href}>
-                          {child.label}
-                        </Link>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-          </nav>
+          <Link to="/shop" className="header-marketplace">Marketplace</Link>
+          <form onSubmit={onSearch} className="header-search">
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="I'm shopping for ..." aria-label="Search products" />
+            <button type="submit" aria-label="Search"><IconSearch /></button>
+          </form>
           <div className="header-tools">
-            <Link to="/track" className="track-link">
-              Order Tracking
-            </Link>
-            <button type="button" className="icon-btn search-toggle" aria-label="Search" onClick={() => setSearchOpen((open) => !open)}>
-              <IconSearch />
-            </button>
-            <Link to="/wishlist" className="icon-btn" aria-label="Wishlist">
+            <Link to="/wishlist" className="icon-btn" aria-label="Wishlist" title="Wishlist">
               <IconHeart />
             </Link>
             <button type="button" className="icon-btn" aria-label="Cart" onClick={() => setDrawer(true)}>
@@ -208,14 +194,37 @@ export function Header() {
             )}
           </div>
         </div>
-        <form onSubmit={onSearch} className={searchOpen ? "search-pop open" : "search-pop"}>
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="I'm shopping for ..."
-            aria-label="Search products"
-          />
-        </form>
+        <nav className="category-nav" aria-label="Product categories">
+          <button type="button" className="cat-btn" onClick={() => setMenuOpen(true)}>
+            <IconGrid />
+            <span>Shop by category</span>
+          </button>
+          <nav className="top-nav" aria-label="Shop">
+            <NavLink to="/" end className={({ isActive }) => (isActive ? "on" : "")}>Home</NavLink>
+            {menus.filter((item) => item.label !== "Home").map((item) => (
+              <div className="menu-item" key={item.label}>
+                <Link
+                  to={item.href}
+                  className={navClass(item.href, false, location.pathname, location.search)}
+                  aria-current={navClass(item.href, false, location.pathname, location.search) ? "page" : undefined}
+                >
+                  {item.label}
+                </Link>
+                {item.items.length > 0 ? (
+                  <div className="dropdown">
+                    {item.items.map((child) => <Link key={child.href + child.label} to={child.href}>{child.label}</Link>)}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </nav>
+          {location.pathname === "/" ? (
+            <div className="category-nav-tools">
+              <Link to="/track"><IconTracking />Order Tracking</Link>
+              <Link to="/outlets"><IconOutlets />Outlets</Link>
+            </div>
+          ) : null}
+        </nav>
       </header>
       <nav className="bottom-nav" aria-label="Mobile">
         <NavLink to="/" end className={({ isActive }) => (isActive ? "on" : "")}>
@@ -270,7 +279,7 @@ export function Header() {
 }
 
 function CartDrawer() {
-  const { cart, drawer, setDrawer, remove, setQuantity, busy } = useCart();
+  const { cart, drawer, setDrawer, remove, setQuantity, busy, loading } = useCart();
   if (!drawer) return null;
   return (
     <>
@@ -283,8 +292,9 @@ function CartDrawer() {
           </button>
         </header>
         <div className="drawer-body">
-          {cart.items.length === 0 ? <p className="empty">Your cart is empty.</p> : null}
-          {cart.items.map((line) => (
+          {loading ? <RowsSkeleton rows={3} /> : null}
+          {!loading && cart.items.length === 0 ? <p className="empty">Your cart is empty.</p> : null}
+          {!loading && cart.items.map((line) => (
             <div className="line" key={line.id}>
               {line.imageUrl ? (
                 <img src={line.imageUrl} alt="" />
@@ -332,7 +342,7 @@ function CartDrawer() {
 }
 
 export function Footer() {
-  const { settings } = useStore();
+  const { settings, settingsReady } = useStore();
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
 
@@ -353,21 +363,17 @@ export function Footer() {
       <div className="footer-grid">
         <div>
           <h3>Contact</h3>
-          {settings.address ? <p>{settings.address}</p> : null}
-          {settings.supportPhone ? <a href={`tel:${settings.supportPhone}`}>{settings.supportPhone}</a> : null}
-          {settings.supportEmail ? <a href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a> : null}
-          <div className="socials">
-            {settings.facebookUrl ? (
-              <a href={settings.facebookUrl} target="_blank" rel="noreferrer">
-                Facebook
-              </a>
-            ) : null}
-            {settings.instagramUrl ? (
-              <a href={settings.instagramUrl} target="_blank" rel="noreferrer">
-                Instagram
-              </a>
-            ) : null}
-          </div>
+          {!settingsReady ? <RowsSkeleton rows={3} /> : (
+            <>
+              {settings.address ? <p>{settings.address}</p> : null}
+              {settings.supportPhone ? <a href={`tel:${settings.supportPhone}`}>{settings.supportPhone}</a> : null}
+              {settings.supportEmail ? <a href={`mailto:${settings.supportEmail}`}>{settings.supportEmail}</a> : null}
+              <div className="socials">
+                {settings.facebookUrl ? <a href={settings.facebookUrl} target="_blank" rel="noreferrer">Facebook</a> : null}
+                {settings.instagramUrl ? <a href={settings.instagramUrl} target="_blank" rel="noreferrer">Instagram</a> : null}
+              </div>
+            </>
+          )}
         </div>
         <div>
           <h3>Company</h3>

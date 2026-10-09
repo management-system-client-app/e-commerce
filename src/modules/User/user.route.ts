@@ -5,7 +5,7 @@ import { asyncHandler } from "../../app/middlewares/asyncHandler";
 import { applyUploadedImage, parseMultipartData, singleImageUpload } from "../../app/middlewares/upload";
 import { validateRequest } from "../../app/middlewares/validateRequest";
 import { userController } from "./user.controller";
-import { registerUserSchema, updateProfileSchema, userIdParamSchema } from "./user.validation";
+import { registerUserSchema, saveAddressSchema, updateProfileSchema, userIdParamSchema } from "./user.validation";
 
 const router = Router();
 
@@ -41,6 +41,21 @@ router.patch(
   avatarFromUpload,
   validateRequest({ body: updateProfileSchema }),
   asyncHandler(userController.updateMe),
+);
+
+router.get(
+  "/me/address",
+  authenticate,
+  authorize("USER"),
+  asyncHandler(userController.getDefaultAddress),
+);
+
+router.put(
+  "/me/address",
+  authenticate,
+  authorize("USER"),
+  validateRequest({ body: saveAddressSchema }),
+  asyncHandler(userController.saveDefaultAddress),
 );
 
 router.get(

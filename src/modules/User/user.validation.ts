@@ -27,6 +27,20 @@ export const userIdParamSchema = z
   })
   .strict();
 
+export const saveAddressSchema = z
+  .object({
+    label: z.string().trim().min(1).max(40).optional(),
+    fullName: z.string().trim().min(1).max(120),
+    phone: z.string().trim().min(7).max(20),
+    line1: z.string().trim().min(1).max(200),
+    line2: z.string().trim().min(1).max(200).nullable().optional(),
+    city: z.string().trim().min(1).max(80),
+    state: z.string().trim().min(1).max(80).nullable().optional(),
+    postalCode: z.string().trim().min(1).max(20),
+    country: z.string().trim().min(2).max(80),
+  })
+  .strict();
+
 export const updateProfileSchema = z
   .object({
     firstName: z.string().trim().min(1).max(80).optional(),
@@ -78,4 +92,5 @@ export const updateProfileSchema = z
 
 export type RegisterUserInput = z.infer<typeof registerUserSchema>;
 export type UserIdParam = z.infer<typeof userIdParamSchema>;
+export type SaveAddressInput = z.infer<typeof saveAddressSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

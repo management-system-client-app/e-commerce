@@ -55,7 +55,7 @@ const placeOrder = async (
     return;
   }
 
-  if (paymentMethod === "BKASH" || paymentMethod === "NAGAD") {
+  if (paymentMethod === "BKASH" || paymentMethod === "NAGAD" || paymentMethod === "ROCKET") {
     res.status(201).json({
       success: true,
       message: "Order placed. Send the total, then submit the transaction id.",

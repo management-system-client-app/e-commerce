@@ -16,6 +16,7 @@ const blockSelect = {
   title: true,
   subtitle: true,
   imageUrl: true,
+  productIds: true,
   linkUrl: true,
   categoryId: true,
   sortOrder: true,
@@ -37,6 +38,7 @@ const arrivalProductSelect = {
   id: true,
   name: true,
   slug: true,
+  status: true,
   gender: true,
   basePrice: true,
   compareAtPrice: true,
@@ -117,6 +119,21 @@ const loadArrivals = async (categoryId: string | null) => {
   return products.map(withProductFlags);
 };
 
+const loadSelectedProducts = async (productIds: string[]) => {
+  if (productIds.length === 0) return [];
+
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds } },
+    select: arrivalProductSelect,
+  });
+  const byId = new Map(products.map((product) => [product.id, withProductFlags(product)]));
+
+  return productIds.flatMap((id) => {
+    const product = byId.get(id);
+    return product ? [product] : [];
+  });
+};
+
 const getStorefront = async () => {
   return cacheGetOrSet("home", "storefront", CATALOG_CACHE_TTL_SECONDS, async () => {
     const now = new Date();
@@ -142,16 +159,29 @@ const getStorefront = async () => {
           products: await loadArrivals(block.categoryId),
         })),
     );
+    const trendingProductIds = [
+      ...new Set(blocks.filter((block) => block.kind === "TRENDING").flatMap((block) => block.productIds)),
+    ];
+    const trendingProducts = (await loadSelectedProducts(trendingProductIds)).filter(
+      (product) => product.status === "ACTIVE" && product.variants.some((variant) => variant.stock - variant.reserved > 0),
+    );
 
-    return { banners, campaigns, newArrivals };
+    return { banners, campaigns, newArrivals, trendingProducts };
   });
 };
 
 const getBlocks = async () => {
-  return prisma.homeBlock.findMany({
+  const blocks = await prisma.homeBlock.findMany({
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     select: blockSelect,
   });
+
+  return Promise.all(
+    blocks.map(async (block) => ({
+      ...block,
+      ...(block.kind === "TRENDING" ? { products: await loadSelectedProducts(block.productIds) } : {}),
+    })),
+  );
 };
 
 const createBlock = async (input: CreateHomeBlockInput) => {
@@ -163,6 +193,7 @@ const createBlock = async (input: CreateHomeBlockInput) => {
       title: input.title,
       subtitle: input.subtitle,
       imageUrl: input.imageUrl,
+      productIds: input.productIds ?? [],
       linkUrl: input.linkUrl,
       categoryId: input.categoryId,
       sortOrder: input.sortOrder ?? 0,
@@ -210,6 +241,7 @@ const updateBlock = async (id: string, input: UpdateHomeBlockInput) => {
       ...(input.title !== undefined ? { title: input.title } : {}),
       ...(input.subtitle !== undefined ? { subtitle: input.subtitle } : {}),
       ...(input.imageUrl !== undefined ? { imageUrl: input.imageUrl } : {}),
+      ...(input.productIds !== undefined ? { productIds: input.productIds } : {}),
       ...(input.linkUrl !== undefined ? { linkUrl: input.linkUrl } : {}),
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
       ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),

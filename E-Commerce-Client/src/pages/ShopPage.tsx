@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import { api, hydrateImages } from "../api";
 import { ProductGrid } from "../components/ProductCard";
+import { ProductGridSkeleton } from "../components/Skeleton";
 import { useStore } from "../state";
 import type { Color, PageMeta, ProductCardData } from "../types";
 
@@ -21,7 +22,9 @@ const genders = [
 
 export function ShopPage() {
   const { catalog } = useStore();
+  const location = useLocation();
   const [params, setParams] = useSearchParams();
+  const defaultGender = location.pathname === "/women" ? "WOMEN" : undefined;
   const [items, setItems] = useState<ProductCardData[]>([]);
   const [meta, setMeta] = useState<PageMeta | null>(null);
   const [colors, setColors] = useState<Color[]>([]);
@@ -40,7 +43,7 @@ export function ShopPage() {
       search: params.get("search") ?? undefined,
       categoryId: params.get("categoryId") ?? undefined,
       brandId: params.get("brandId") ?? undefined,
-      gender: params.get("gender") ?? undefined,
+      gender: params.get("gender") ?? defaultGender,
       sizeId: params.get("sizeId") ?? undefined,
       colorId: params.get("colorId") ?? undefined,
       fabricId: params.get("fabricId") ?? undefined,
@@ -48,7 +51,7 @@ export function ShopPage() {
       maxPrice: params.get("maxPrice") ?? undefined,
       inStock: params.get("inStock") === "true" ? "true" : undefined,
     }),
-    [params],
+    [params, defaultGender],
   );
 
   useEffect(() => {
@@ -106,13 +109,14 @@ export function ShopPage() {
   }
 
   const category = catalog.categories.find((item) => item.id === params.get("categoryId"));
-  const gender = genders.find((item) => item.id === params.get("gender"));
+  const gender = genders.find((item) => item.id === (params.get("gender") ?? defaultGender));
   const crumb = category?.name ?? gender?.label ?? (params.get("search") ? `Search: ${params.get("search")}` : "Shop");
 
   const filterProps = {
     catalog,
     colors,
     params,
+    defaultGender,
     minPrice,
     maxPrice,
     setMinPrice,
@@ -157,8 +161,9 @@ export function ShopPage() {
             </select>
           </div>
           {error ? <p className="error">{error}</p> : null}
-          {!loading && items.length === 0 ? <p className="empty">Sorry! No result.</p> : null}
-          <ProductGrid products={items} />
+          {loading ? <ProductGridSkeleton /> : null}
+          {!loading && items.length === 0 && !error ? <p className="empty">Sorry! No result.</p> : null}
+          {!loading && items.length > 0 ? <ProductGrid products={items} /> : null}
           {meta && meta.totalPages > 1 ? (
             <div className="pager">
               {Array.from({ length: meta.totalPages }, (_, index) => index + 1).map((page) => (
@@ -199,6 +204,7 @@ function Filters({
   catalog,
   colors,
   params,
+  defaultGender,
   minPrice,
   maxPrice,
   setMinPrice,
@@ -210,6 +216,7 @@ function Filters({
   catalog: ReturnType<typeof useStore>["catalog"];
   colors: Color[];
   params: URLSearchParams;
+  defaultGender?: string;
   minPrice: string;
   maxPrice: string;
   setMinPrice: (value: string) => void;
@@ -218,7 +225,7 @@ function Filters({
   applyPrice: (event: FormEvent) => void;
   clear: () => void;
 }) {
-  const selected = (key: string) => params.get(key);
+  const selected = (key: string) => params.get(key) ?? (key === "gender" ? defaultGender ?? null : null);
 
   return (
     <div>

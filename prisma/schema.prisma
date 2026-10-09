@@ -47,6 +47,7 @@ enum HomeBlockKind {
   BANNER
   CAMPAIGN
   NEW_ARRIVAL
+  TRENDING
 }
 
 enum OrderStatus {
@@ -66,6 +67,7 @@ enum PaymentProvider {
   SSLCOMMERZ
   BKASH
   NAGAD
+  ROCKET
   COD
 }
 
@@ -74,6 +76,7 @@ enum CheckoutPaymentMethod {
   STRIPE
   BKASH
   NAGAD
+  ROCKET
 }
 
 enum AuthProvider {
@@ -312,6 +315,7 @@ model HomeBlock {
   title      String
   subtitle   String?
   imageUrl   String?
+  productIds String[]      @default([])
   linkUrl    String?
   categoryId String?
   sortOrder  Int           @default(0)
@@ -414,6 +418,7 @@ model StoreSetting {
   instagramUrl String?
   bkashNumber  String?
   nagadNumber  String?
+  rocketNumber String?
   updatedAt    DateTime @updatedAt
 }
 
@@ -882,4 +887,3 @@ model CouponRedemption {
 
   @@index([couponId, userId])
 }
-
