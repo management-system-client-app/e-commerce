@@ -16964,3 +16964,4 @@
 {"level":"info","message":"\u001b[0mGET /json/version \u001b[33m404\u001b[0m 1.145 ms - -\u001b[0m","timestamp":"2026-10-10T17:35:33.508Z"}
 {"level":"info","message":"\u001b[0mGET / \u001b[36m304\u001b[0m 0.332 ms - -\u001b[0m","timestamp":"2026-10-10T17:35:33.687Z"}
 {"level":"info","message":"SIGINT received. Shutting down.","timestamp":"2026-10-10T17:35:38.788Z"}
+{"level":"info","message":"SIGINT received. Shutting down.","timestamp":"2026-10-10T17:39:19.491Z"}
