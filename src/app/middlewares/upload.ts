@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
-import { uploadImageBuffer } from "../config/cloudinary";
+import { uploadHomeMediaBuffer, uploadImageBuffer } from "../config/cloudinary";
 import { AppError } from "../errors/AppError";
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -65,8 +65,6 @@ const homeMediaUpload = multer({
   },
 });
 
-export const productImagesUpload = upload.array("images", MAX_PRODUCT_IMAGES);
-
 /**
  * Multipart product creates send the JSON body in a `data` field and files in `images`.
  * Plain JSON requests are left unchanged.
@@ -88,23 +86,36 @@ export const parseMultipartData = (req: Request, _res: Response, next: NextFunct
 };
 
 export const singleImageUpload = upload.single("image");
+
+const imageOnlyFileFilter: multer.Options["fileFilter"] = (_req, file, callback) => {
+  if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+    callback(null, true);
+    return;
+  }
+
+  callback(AppError.badRequest("Only JPEG, PNG, and WebP images are allowed"));
+};
+
+const productImagesOnlyUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: imageOnlyFileFilter,
+  limits: { fileSize: MAX_IMAGE_BYTES, files: MAX_PRODUCT_IMAGES },
+});
+
 const imageOnlyUpload = multer({
   storage: multer.memoryStorage(),
-  fileFilter: (_req, file, callback) => {
-    if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
-      callback(null, true);
-      return;
-    }
-    callback(AppError.badRequest("Only JPEG, PNG, and WebP images are allowed"));
-  },
+  fileFilter: imageOnlyFileFilter,
   limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
 });
+
+export const productImagesUpload = productImagesOnlyUpload.array("images", MAX_PRODUCT_IMAGES);
 export const singleImageOnlyUpload = imageOnlyUpload.single("image");
 export const singleHomeMediaUpload = homeMediaUpload.single("image");
 
 /** When a multipart request includes `image`, upload it and set `imageUrl` on the JSON body. */
-export const applyUploadedImage =
+const applyUploadedUpload =
   (folder: string) =>
+  (upload: typeof uploadImageBuffer) =>
   async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     if (!req.file) {
       next();
@@ -112,7 +123,7 @@ export const applyUploadedImage =
     }
 
     try {
-      const uploaded = await uploadImageBuffer(req.file.buffer, folder, req.file.mimetype, req.file.originalname);
+      const uploaded = await upload(req.file.buffer, folder, req.file.mimetype, req.file.originalname);
       const body = req.body && typeof req.body === "object" ? req.body : {};
       req.body = { ...body, imageUrl: uploaded.url };
       next();
@@ -120,3 +131,8 @@ export const applyUploadedImage =
       next(error);
     }
   };
+
+export const applyUploadedImage = (folder: string) =>
+  applyUploadedUpload(folder)(uploadImageBuffer);
+export const applyUploadedHomeMedia = (folder: string) =>
+  applyUploadedUpload(folder)(uploadHomeMediaBuffer);

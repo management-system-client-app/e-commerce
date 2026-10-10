@@ -10,6 +10,7 @@ import { env } from "./env";
 const isConfigured = Boolean(
   env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SECRET,
 );
+const requiresCloudinary = env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
 
 if (isConfigured) {
   cloudinary.config({
@@ -41,6 +42,16 @@ const uploadToCloudinary = (
       { folder, resource_type: resourceType },
       (error, result) => {
         if (error || !result) {
+          if (error?.http_code === 403) {
+            reject(
+              new AppError(
+                "Cloudinary API key needs permission to create and upload assets",
+                503,
+              ),
+            );
+            return;
+          }
+
           const message =
             error && typeof error === "object" && "message" in error && typeof error.message === "string"
               ? error.message
@@ -113,19 +124,18 @@ const saveLocalImage = async (buffer: Buffer, folder: string, mimeType?: string,
   };
 };
 
-export const uploadImageBuffer = async (
+const uploadBuffer = async (
   buffer: Buffer,
-  folder = "ecommerce/products",
-  mimeType?: string,
-  fileName?: string,
+  folder: string,
+  mimeType: string | undefined,
+  fileName: string | undefined,
+  resourceType: "image" | "video",
 ): Promise<UploadedImage> => {
-  const resourceType = detectResourceType(mimeType, fileName, buffer);
-
   if (isConfigured) {
     try {
       return await uploadToCloudinary(buffer, folder, resourceType);
     } catch (error) {
-      if (env.NODE_ENV === "production") {
+      if (requiresCloudinary) {
         throw error;
       }
 
@@ -133,12 +143,27 @@ export const uploadImageBuffer = async (
         message: error instanceof Error ? error.message : "Media upload failed",
       });
     }
-  } else if (env.NODE_ENV === "production") {
+  } else if (requiresCloudinary) {
     assertConfigured();
   }
 
   return saveLocalImage(buffer, folder, mimeType, fileName);
 };
+
+export const uploadImageBuffer = (
+  buffer: Buffer,
+  folder = "ecommerce/products",
+  mimeType?: string,
+  fileName?: string,
+): Promise<UploadedImage> => uploadBuffer(buffer, folder, mimeType, fileName, "image");
+
+export const uploadHomeMediaBuffer = (
+  buffer: Buffer,
+  folder = "ecommerce/home",
+  mimeType?: string,
+  fileName?: string,
+): Promise<UploadedImage> =>
+  uploadBuffer(buffer, folder, mimeType, fileName, detectResourceType(mimeType, fileName, buffer));
 
 export const deleteCloudinaryImages = async (publicIds: string[]): Promise<void> => {
   if (!isConfigured || publicIds.length === 0) {
