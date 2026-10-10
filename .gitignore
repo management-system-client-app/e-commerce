@@ -2,7 +2,7 @@ node_modules
 .env
 .env.local
 dist
-logs/auploads/
+ kaj klogs/auploads/
 generated/prisma
 .vercel
 .env*

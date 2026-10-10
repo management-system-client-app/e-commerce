@@ -19,10 +19,19 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 
+const isAllowedOrigin = (origin: string): boolean => {
+  if (env.ALLOWED_ORIGINS.includes(origin)) {
+    return true;
+  }
+
+  return /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+    || /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin);
+};
+
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin || env.ALLOWED_ORIGINS.includes(origin)) {
+      if (!origin || isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
