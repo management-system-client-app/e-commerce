@@ -7,6 +7,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
+  "image/avif",
   "video/mp4",
   "video/webm",
   "video/quicktime",
@@ -15,7 +16,7 @@ const ALLOWED_MIME_TYPES = new Set([
   "application/octet-stream",
 ]);
 const VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov", ".m4v", ".ogv", ".avi"];
-const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".avif"];
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_HOME_MEDIA_BYTES = 100 * 1024 * 1024;
 const MAX_PRODUCT_IMAGES = 6;
@@ -44,7 +45,7 @@ const imageFileFilter: multer.Options["fileFilter"] = (_req, file, callback) => 
     return;
   }
 
-  callback(AppError.badRequest("Only JPEG, PNG, WebP, MP4, WebM, and MOV videos are allowed"));
+  callback(AppError.badRequest("Only JPEG, PNG, WebP, AVIF, MP4, WebM, and MOV videos are allowed"));
 };
 
 export const upload = multer({
@@ -91,11 +92,11 @@ export const singleImageUpload = upload.single("image");
 const imageOnlyUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (_req, file, callback) => {
-    if (["image/jpeg", "image/png", "image/webp"].includes(file.mimetype)) {
+    if (["image/jpeg", "image/png", "image/webp", "image/avif"].includes(file.mimetype)) {
       callback(null, true);
       return;
     }
-    callback(AppError.badRequest("Only JPEG, PNG, and WebP images are allowed"));
+    callback(AppError.badRequest("Only JPEG, PNG, WebP, and AVIF images are allowed"));
   },
   limits: { fileSize: MAX_IMAGE_BYTES, files: 1 },
 });

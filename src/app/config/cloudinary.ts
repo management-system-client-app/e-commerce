@@ -59,8 +59,37 @@ const uploadToCloudinary = (
     Readable.from(buffer).pipe(stream);
   });
 
+const isAvif = (buffer: Buffer): boolean => {
+  if (buffer.subarray(4, 8).toString("ascii") !== "ftyp") {
+    return false;
+  }
+
+  const boxSize = buffer.readUInt32BE(0);
+  const boxEnd = Math.min(boxSize, buffer.length);
+  if (boxSize < 16) {
+    return false;
+  }
+
+  for (let offset = 8; offset + 4 <= boxEnd; offset += offset === 8 ? 8 : 4) {
+    const brand = buffer.subarray(offset, offset + 4).toString("ascii");
+    if (brand === "avif" || brand === "avis") {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const detectResourceType = (mimeType?: string, fileName?: string, buffer?: Buffer): "image" | "video" => {
   const loweredName = (fileName ?? "").toLowerCase();
+  if (
+    mimeType === "image/avif" ||
+    loweredName.endsWith(".avif") ||
+    (buffer !== undefined && isAvif(buffer))
+  ) {
+    return "image";
+  }
+
   if (mimeType?.startsWith("video/")) return "video";
   if ([".mp4", ".webm", ".mov", ".m4v", ".ogv", ".avi", ".mkv"].some((extension) => loweredName.endsWith(extension))) {
     return "video";
@@ -79,6 +108,7 @@ const detectResourceType = (mimeType?: string, fileName?: string, buffer?: Buffe
 
 const extensionFor = (buffer: Buffer, mimeType?: string, fileName?: string): string => {
   const loweredName = (fileName ?? "").toLowerCase();
+  if (mimeType === "image/avif" || loweredName.endsWith(".avif") || isAvif(buffer)) return "avif";
   if (/[.]mp4$/i.test(loweredName)) return "mp4";
   if (/[.]webm$/i.test(loweredName)) return "webm";
   if (/[.]mov$/i.test(loweredName) || /[.]quicktime$/i.test(loweredName)) return "mov";
