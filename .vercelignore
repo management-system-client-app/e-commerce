@@ -1,0 +1,8 @@
+.env*
+.git
+.pnpm-store
+.vercel
+dist
+generated/prisma
+logs
+uploads
