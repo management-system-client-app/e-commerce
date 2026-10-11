@@ -79,11 +79,54 @@ export const parseMultipartData = (req: Request, _res: Response, next: NextFunct
   }
 
   try {
-    req.body = JSON.parse(data) as unknown;
+    Object.defineProperty(req, "body", {
+      value: JSON.parse(data) as unknown,
+      configurable: true,
+      enumerable: true,
+      writable: true,
+    });
     next();
   } catch {
     next(AppError.badRequest("Form data must be valid JSON"));
   }
+};
+
+export const parseProductMultipartData = (req: Request, res: Response, next: NextFunction): void => {
+  const rawImageColorIds = req.body?.imageColorIds;
+  if (rawImageColorIds === undefined) {
+    parseMultipartData(req, res, next);
+    return;
+  }
+
+  if (typeof rawImageColorIds !== "string") {
+    next(AppError.badRequest("Image color mapping must be valid JSON"));
+    return;
+  }
+
+  let imageColorIds: unknown;
+  try {
+    imageColorIds = JSON.parse(rawImageColorIds);
+  } catch {
+    next(AppError.badRequest("Image color mapping must be valid JSON"));
+    return;
+  }
+
+  if (
+    !Array.isArray(imageColorIds) ||
+    !imageColorIds.every((colorId) => colorId === null || typeof colorId === "string")
+  ) {
+    next(AppError.badRequest("Image color mapping must contain only color IDs or null"));
+    return;
+  }
+
+  const files = Array.isArray(req.files) ? req.files : [];
+  if (imageColorIds.length !== files.length) {
+    next(AppError.badRequest("Image color mapping must match the uploaded images"));
+    return;
+  }
+
+  res.locals.productImageColorIds = imageColorIds;
+  parseMultipartData(req, res, next);
 };
 
 export const singleImageUpload = upload.single("image");

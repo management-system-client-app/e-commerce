@@ -11,9 +11,10 @@ import type {
 
 const createProduct = async (
   req: ValidatedRequest<CreateProductInput>,
-  res: Response,
+  res: Response<unknown, Record<string, unknown> & { productImageColorIds?: (string | null)[] }>,
 ): Promise<void> => {
   const files = Array.isArray(req.files) ? req.files : [];
+  const imageColorIds = res.locals.productImageColorIds ?? [];
   const uploaded =
     files.length === 0
       ? []
@@ -24,9 +25,10 @@ const createProduct = async (
   try {
     const product = await productService.createProduct(
       req.validatedBody,
-      uploaded.map((image) => ({
+      uploaded.map((image, index) => ({
         url: image.url,
         alt: req.validatedBody.name,
+        colorId: imageColorIds[index] ?? null,
       })),
     );
 
@@ -94,10 +96,11 @@ const getSingleProduct = async (
 
 const updateProduct = async (
   req: ValidatedRequest<UpdateProductInput, ProductIdParam>,
-  res: Response,
+  res: Response<unknown, Record<string, unknown> & { productImageColorIds?: (string | null)[] }>,
 ): Promise<void> => {
   const { id } = req.validatedParams;
   const files = Array.isArray(req.files) ? req.files : [];
+  const imageColorIds = res.locals.productImageColorIds ?? [];
   const uploaded =
     files.length === 0
       ? []
@@ -110,7 +113,11 @@ const updateProduct = async (
     product = await productService.updateProduct(
       id,
       req.validatedBody,
-      uploaded.map((image) => ({ url: image.url, alt: req.validatedBody.name ?? "" })),
+      uploaded.map((image, index) => ({
+        url: image.url,
+        alt: req.validatedBody.name ?? "",
+        colorId: imageColorIds[index] ?? null,
+      })),
     );
   } catch (error) {
     await deleteCloudinaryImages(uploaded.map((image) => image.publicId));

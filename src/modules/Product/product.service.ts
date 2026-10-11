@@ -151,7 +151,8 @@ const buildSku = (slug: string, sizeName: string, fabricName: string): string =>
 const loadSizes = async (sizes: NonNullable<CreateProductInput["sizes"]>) => {
   const sizeIds = [...new Set(sizes.map((size) => size.sizeId))];
   const fabricIds = [...new Set(sizes.map((size) => size.fabricId))];
-  const [foundSizes, foundFabrics] = await Promise.all([
+  const colorIds = [...new Set(sizes.flatMap((size) => size.colorId ? [size.colorId] : []))];
+  const [foundSizes, foundFabrics, foundColors] = await Promise.all([
     prisma.size.findMany({
       where: { id: { in: sizeIds } },
       select: { id: true, name: true },
@@ -159,6 +160,10 @@ const loadSizes = async (sizes: NonNullable<CreateProductInput["sizes"]>) => {
     prisma.fabric.findMany({
       where: { id: { in: fabricIds } },
       select: { id: true, name: true },
+    }),
+    prisma.color.findMany({
+      where: { id: { in: colorIds } },
+      select: { id: true },
     }),
   ]);
 
@@ -168,6 +173,9 @@ const loadSizes = async (sizes: NonNullable<CreateProductInput["sizes"]>) => {
 
   if (foundFabrics.length !== fabricIds.length) {
     throw new NotFoundError("Fabric not found");
+  }
+  if (foundColors.length !== colorIds.length) {
+    throw new NotFoundError("Color not found");
   }
 
   return {
@@ -201,8 +209,14 @@ const buildSlug = async (name: string, requestedSlug?: string): Promise<string> 
 
 const createProduct = async (
   input: CreateProductInput,
-  images: { url: string; alt: string }[] = [],
+  images: { url: string; alt: string; colorId?: string | null }[] = [],
 ) => {
+  const productColorIds = new Set(
+    (input.sizes ?? []).flatMap((size) => size.colorId ? [size.colorId] : []),
+  );
+  if (images.some((image) => image.colorId && !productColorIds.has(image.colorId))) {
+    throw AppError.badRequest("Each color photo must match a color selected for the product");
+  }
   await assertCategoryAndBrand(input.categoryId, input.brandId);
   const slug = await buildSlug(input.name, input.slug);
   const sizeCatalog = input.sizes?.length ? await loadSizes(input.sizes) : undefined;
@@ -232,6 +246,7 @@ const createProduct = async (
                 create: input.sizes.map((size) => ({
                   sizeId: size.sizeId,
                   fabricId: size.fabricId,
+                  colorId: size.colorId ?? undefined,
                   stock: size.stock,
                   price: size.price,
                   sku:
@@ -251,6 +266,7 @@ const createProduct = async (
                 create: images.map((image, index) => ({
                   url: image.url,
                   alt: image.alt,
+                  colorId: image.colorId ?? undefined,
                   sortOrder: index,
                   isPrimary: index === 0,
                 })),
@@ -515,7 +531,7 @@ const getSingleProduct = async (id: string) => {
 const updateProduct = async (
   id: string,
   input: UpdateProductInput,
-  images: { url: string; alt: string }[] = [],
+  images: { url: string; alt: string; colorId?: string | null }[] = [],
 ) => {
   const existing = await prisma.product.findUnique({
     where: { id },
@@ -525,6 +541,7 @@ const updateProduct = async (
       publishedAt: true,
       status: true,
       images: { select: { sortOrder: true } },
+      variants: { select: { colorId: true } },
     },
   });
 
@@ -534,6 +551,11 @@ const updateProduct = async (
 
   if (existing.images.length + images.length > 6) {
     throw AppError.badRequest("A product can have up to 6 images");
+  }
+
+  const productColorIds = new Set(existing.variants.flatMap((variant) => variant.colorId ? [variant.colorId] : []));
+  if (images.some((image) => image.colorId && !productColorIds.has(image.colorId))) {
+    throw AppError.badRequest("Each color photo must match a color selected for the product");
   }
 
   await assertCategoryAndBrand(input.categoryId, input.brandId);
@@ -549,6 +571,7 @@ const updateProduct = async (
       create: images.map((image, index) => ({
         url: image.url,
         alt: image.alt,
+        colorId: image.colorId ?? undefined,
         sortOrder: existing.images.length + index,
         isPrimary: existing.images.length === 0 && index === 0,
       })),
