@@ -101,7 +101,7 @@ const getProductReviews = async (productId: string, query: ReviewListQuery) => {
   const where = { productId };
   const skip = (query.page - 1) * query.limit;
 
-  const [items, total, summary] = await prisma.$transaction([
+  const [items, total, summary] = await Promise.all([
     prisma.review.findMany({
       where,
       skip,

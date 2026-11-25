@@ -162,7 +162,7 @@ const getAllVariants = async (query: VariantListQuery) => {
 
   const skip = (query.page - 1) * query.limit;
 
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.productVariant.findMany({
       where,
       skip,

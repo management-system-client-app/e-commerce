@@ -75,7 +75,7 @@ const getCoupons = async (query: CouponListQuery) => {
   };
   const skip = (query.page - 1) * query.limit;
 
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.coupon.findMany({
       where,
       skip,

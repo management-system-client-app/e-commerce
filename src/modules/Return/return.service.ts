@@ -184,7 +184,7 @@ const getReturns = async (auth: AuthContext, query: ReturnListQuery) => {
   };
   const skip = (query.page - 1) * query.limit;
 
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.returnRequest.findMany({
       where,
       skip,

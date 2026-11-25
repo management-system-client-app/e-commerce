@@ -13,7 +13,7 @@ const orderStatuses = [
 ] as const;
 
 const getOverview = async () => {
-  const [revenue, statusGroups, activeUsers] = await prisma.$transaction([
+  const [revenue, statusGroups, activeUsers] = await Promise.all([
     prisma.order.aggregate({
       where: {
         paidAt: { not: null },

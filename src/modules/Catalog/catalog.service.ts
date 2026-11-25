@@ -89,7 +89,7 @@ const getSizes = async (query: CatalogListQuery) => {
     : {};
   const skip = (query.page - 1) * query.limit;
 
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.size.findMany({
       where,
       skip,
@@ -129,7 +129,7 @@ const getFabrics = async (query: CatalogListQuery) => {
     : {};
   const skip = (query.page - 1) * query.limit;
 
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.fabric.findMany({
       where,
       skip,
