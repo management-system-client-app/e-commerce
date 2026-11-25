@@ -108,17 +108,11 @@ const ensureDatabase = async (): Promise<void> => {
 
 const applyMigrations = (): Promise<void> =>
   new Promise((resolve, reject) => {
-    const bin = path.join(
-      process.cwd(),
-      "node_modules",
-      ".bin",
-      process.platform === "win32" ? "prisma.cmd" : "prisma",
-    );
-    const child = spawn(bin, ["migrate", "deploy"], {
+    const prismaCli = path.join(process.cwd(), "node_modules", "prisma", "build", "index.js");
+    const child = spawn(process.execPath, [prismaCli, "migrate", "deploy"], {
       cwd: process.cwd(),
       env: process.env,
       stdio: "inherit",
-      shell: process.platform === "win32",
     });
 
     child.on("error", (error: NodeJS.ErrnoException) => {

@@ -347,6 +347,8 @@ const placeOrder = async (buyer: OrderBuyer, input: PlaceOrderInput) => {
     });
 
     return { order, paymentMethod };
+  }, {
+    timeout: 15_000,
   });
 
   const customerName = placed.order.user
